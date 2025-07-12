@@ -30,23 +30,38 @@ class ImageViewer:
         
         if self.image_paths:
             self.show_image()
-        
+
     def setup_ui(self):
         # 主框架
         self.main_frame = ttk.Frame(self.root, padding="10")
         self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
+
+        # 配置样式
+        style = ttk.Style()
+        style.configure('ButtonFrame.TFrame', background='#cccccc')
+        style.configure('NavButton.TButton', background='#f0f0f0', borderwidth=1, relief='solid')
+
         # 图片显示区域
         self.image_label = ttk.Label(self.main_frame)
-        self.image_label.grid(row=0, column=0, columnspan=2)
-        
+        self.image_label.grid(row=0, column=0, columnspan=3)
+
+        # 按钮框架，用于创建贯通左右的长条
+        button_frame = ttk.Frame(self.main_frame, style='ButtonFrame.TFrame')
+        button_frame.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=10)
+        button_frame.columnconfigure(0, weight=4)
+        button_frame.columnconfigure(1, weight=1)
+        button_frame.columnconfigure(2, weight=4)
+
         # 导航按钮
-        self.prev_button = ttk.Button(self.main_frame, text="上一张", command=self.prev_image)
-        self.prev_button.grid(row=1, column=0, pady=10)
-        
-        self.next_button = ttk.Button(self.main_frame, text="下一张", command=self.next_image)
-        self.next_button.grid(row=1, column=1, pady=10)
-        
+        self.prev_button = ttk.Button(button_frame, text="上一张", command=self.prev_image, style='NavButton.TButton')
+        self.prev_button.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=1, pady=1)
+
+        self.first_button = ttk.Button(button_frame, text="首页", command=self.first_image, style='NavButton.TButton')
+        self.first_button.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=1, pady=1)
+
+        self.next_button = ttk.Button(button_frame, text="下一张", command=self.next_image, style='NavButton.TButton')
+        self.next_button.grid(row=0, column=2, sticky=(tk.W, tk.E), padx=1, pady=1)
+
         # 状态栏
         self.status_var = tk.StringVar()
         if self.image_paths:
@@ -54,13 +69,14 @@ class ImageViewer:
         else:
             self.status_var.set("未提供有效的图片文件夹路径")
         self.status_bar = ttk.Label(self.main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        self.status_bar.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E))
-        
+        self.status_bar.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E))
+
         # 配置网格权重
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         self.main_frame.columnconfigure(0, weight=1)
         self.main_frame.columnconfigure(1, weight=1)
+        self.main_frame.columnconfigure(2, weight=1)
         self.main_frame.rowconfigure(0, weight=1)
 
     def load_images(self, folder_path):
@@ -72,7 +88,7 @@ class ImageViewer:
                     self.image_paths.append(os.path.join(root, file))
         self.image_paths.sort()
         self.current_index = 0
-        
+
         if self.image_paths:
             self.status_var.set(f"已加载 {len(self.image_paths)} 张图片")
         else:
@@ -86,10 +102,10 @@ class ImageViewer:
                 # 调整图片大小以适应窗口
                 screen_width = self.root.winfo_screenwidth()
                 screen_height = self.root.winfo_screenheight()
-                max_width = int(screen_width * 0.8)
-                max_height = int(screen_height * 0.8)
+                max_width = int(screen_width * 0.7)
+                max_height = int(screen_height * 0.7)
                 image.thumbnail((max_width, max_height))
-                
+
                 photo = ImageTk.PhotoImage(image)
                 self.image_label.configure(image=photo)
                 self.image_label.image = photo
@@ -106,6 +122,11 @@ class ImageViewer:
     def prev_image(self):
         if self.image_paths:
             self.current_index = (self.current_index - 1) % len(self.image_paths)
+            self.show_image()
+
+    def first_image(self):
+        if self.image_paths:
+            self.current_index = 0
             self.show_image()
 
 if __name__ == "__main__":
