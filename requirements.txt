@@ -1,0 +1,3 @@
+# 请确保系统已安装 7z, unrar 和 unzip 命令行工具
+# Python 依赖
+Pillow>=9.0.0
