@@ -2,9 +2,9 @@ import sys
 import os
 import argparse
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QPushButton, QLabel, QScrollArea)
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt
+                            QHBoxLayout, QPushButton, QLabel, QScrollArea, QSizePolicy)
+from PyQt5.QtGui import QPixmap, QImage, QImageReader
+from PyQt5.QtCore import Qt, QByteArray, QTimer
 from PIL import Image, ImageQt, UnidentifiedImageError
 
 class PictureBrowser(QMainWindow):
@@ -21,7 +21,7 @@ class PictureBrowser(QMainWindow):
         
     def initUI(self):
         self.setWindowTitle('图片浏览器')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 600, 900)
         
         # 主部件和布局
         central_widget = QWidget()
@@ -36,32 +36,46 @@ class PictureBrowser(QMainWindow):
         self.scroll_area.setWidget(self.image_label)
         main_layout.addWidget(self.scroll_area)
         
-        # 按钮布局
-        button_layout = QHBoxLayout()
+        # 控制区域布局（垂直）
+        control_layout = QVBoxLayout()
         
-        # 回到首页按钮
-        self.first_page_btn = QPushButton('首页')
-        self.first_page_btn.clicked.connect(self.first_page)
-        self.first_page_btn.setEnabled(False)
-        button_layout.addWidget(self.first_page_btn)
+        # 按钮行布局（水平）
+        button_row_layout = QHBoxLayout()
         
         # 上一页按钮
         self.prev_btn = QPushButton('上一页')
         self.prev_btn.clicked.connect(self.prev_image)
         self.prev_btn.setEnabled(False)
-        button_layout.addWidget(self.prev_btn)
+        self.prev_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        button_row_layout.addWidget(self.prev_btn)
+        button_row_layout.setStretchFactor(self.prev_btn, 4)
+        
+        # 首页按钮
+        self.first_page_btn = QPushButton('首页')
+        self.first_page_btn.clicked.connect(self.first_page)
+        self.first_page_btn.setEnabled(False)
+        self.first_page_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        button_row_layout.addWidget(self.first_page_btn)
+        button_row_layout.setStretchFactor(self.first_page_btn, 2)
         
         # 下一页按钮
         self.next_btn = QPushButton('下一页')
         self.next_btn.clicked.connect(self.next_image)
         self.next_btn.setEnabled(False)
-        button_layout.addWidget(self.next_btn)
+        self.next_btn.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        button_row_layout.addWidget(self.next_btn)
+        button_row_layout.setStretchFactor(self.next_btn, 4)
         
-        # 状态标签
+        # 状态行布局（水平）
+        status_row_layout = QHBoxLayout()
         self.status_label = QLabel('未选择图片文件夹')
-        button_layout.addWidget(self.status_label)
+        status_row_layout.addWidget(self.status_label)
         
-        main_layout.addLayout(button_layout)
+        # 将按钮行和状态行添加到控制区域布局
+        control_layout.addLayout(button_row_layout)
+        control_layout.addLayout(status_row_layout)
+        
+        main_layout.addLayout(control_layout)
         
     def select_directory(self):
         # 移除文件夹选择功能
@@ -84,26 +98,43 @@ class PictureBrowser(QMainWindow):
         if 0 <= self.current_index < len(self.image_files):
             image_path = self.image_files[self.current_index]
             
-            # 使用Pillow打开图片
+            # 使用QImageReader打开图片以支持WebP格式
             try:
-                img = Image.open(image_path)
+                # 获取文件扩展名
+                ext = os.path.splitext(image_path)[1].lower()
+                reader = QImageReader(image_path)
+                
+                # 对WebP格式显式设置格式
+                if ext == '.webp':
+                    reader.setFormat(QByteArray(b"webp"))
+                
+                image = reader.read()
+                if image.isNull():
+                    raise ValueError(f"无法读取图片: {reader.errorString()}")
                 
                 # 调整图片大小以适应窗口
-                window_width = self.scroll_area.width()
-                window_height = self.scroll_area.height()
+                # 获取视口实际显示尺寸
+                def adjust_initial_image():
+                    window_width = self.scroll_area.viewport().width()
+                    window_height = self.scroll_area.viewport().height()
+                    
+                    # 确保至少有最小尺寸，避免初始化为0
+                    window_width = max(window_width, 400)
+                    window_height = max(window_height, 300)
+                    
+                    # 保持宽高比缩放
+                    # 长边优先填满显示区域
+                    scaled_image = image.scaled(window_width - 20, window_height - 20, 
+                                               Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    pixmap = QPixmap.fromImage(scaled_image)
+                    
+                    self.image_label.setPixmap(pixmap)
                 
-                # 保持宽高比缩放
-                img.thumbnail((window_width - 20, window_height - 20))
-                
-                # 转换为Qt可用的格式
-                qt_img = ImageQt.ImageQt(img)
-                pixmap = QPixmap.fromImage(qt_img)
-                
-                self.image_label.setPixmap(pixmap)
+                QTimer.singleShot(0, adjust_initial_image)
                 self.status_label.setText(f"图片 {self.current_index + 1}/{len(self.image_files)}: {os.path.basename(image_path)}")
-            except UnidentifiedImageError:
-                error_msg = f"""无法识别图片格式: {os.path.basename(image_path)}
-提示: 该文件可能不是有效的图片或已损坏"""
+            except ValueError as e:
+                error_msg = f"""无法读取图片: {os.path.basename(image_path)}
+错误信息: {str(e)}"""
                 self.status_label.setText(error_msg)
             except PermissionError:
                 error_msg = f"""权限错误: 无法读取文件 {os.path.basename(image_path)}
@@ -122,9 +153,9 @@ class PictureBrowser(QMainWindow):
                     pass
                 # 针对常见格式的特定提示
                 if ext == '.webp':
-                    error_msg += "提示: 请安装WebP支持 (pip install pillow[webp])"
+                    error_msg += "提示: 请确保已正确安装WebP支持"
                 elif ext in ['.tiff', '.tif']:
-                    error_msg += "提示: 请安装TIFF支持 (pip install pillow[tiff])"
+                    error_msg += "提示: 请确保已正确安装TIFF支持"
                 self.status_label.setText(error_msg)
     
     def first_page(self):
