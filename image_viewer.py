@@ -132,6 +132,7 @@ class ImageViewer:
 if __name__ == "__main__":
     root = tk.Tk()
     # 示例：请替换为实际的文件夹路径
-    folder_path = "D:/Documents/漫画/1/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]"
-    app = ImageViewer(root, folder_path)
+    folder_path = ["D:/Documents/漫画/1/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]",
+    "D:/Documents/漫画/1/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]"]
+    app = ImageViewer(root, folder_path[1])
     root.mainloop()
