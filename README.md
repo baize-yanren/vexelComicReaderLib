@@ -5,20 +5,14 @@ VexelCRL是一个基于Python的图片管理器项目，主要用于管理和浏
 
 ## 项目架构
 vexelComicReaderLib
-|---comicReader # 图片浏览器
-|
-|---comicLib    # 文件管理器
-|
-|---resource    # 资源目录
-|     |---icons     # 图标
-|
-|---requirement # 需求目录
-|
-|---settings    # 设置列表
-|
-|---LICENSE     # 许可证
-|
-|---README	    # 项目介绍
+├─comicReader # 图片浏览器
+├─comicLib    # 文件管理器
+├─resource    # 资源目录
+│     └─icons     # 图标
+├─requirement # 需求目录
+├─settings    # 设置列表
+├─LICENSE     # 许可证
+└─README	    # 项目介绍
 
 ## 功能特点
 - 支持多种图片格式：JPG、PNG、GIF、BMP、TIFF、WebP等

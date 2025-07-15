@@ -22,7 +22,8 @@ class PictureBrowser(QMainWindow):
     def initUI(self):
         self.setWindowTitle('VexelViewer')
         # 设置窗口图标
-        icon_path = "d:/Documents/GithubCode/comic-viewer/resource/icons/vexellogo.png"
+        # 使用项目内相对路径加载图标
+        icon_path = os.path.join(os.path.dirname(__file__), 'resource', 'icons', 'vexellogo.png')
         self.setWindowIcon(QIcon(icon_path))
         self.setGeometry(100, 100, 600, 900)
         
@@ -218,7 +219,7 @@ if __name__ == '__main__':
     
     app = QApplication(sys.argv)
     # 设置应用图标，确保任务栏显示
-    icon_path = "d:/Documents/GithubCode/comic-viewer/resource/icons/vexellogo.png"
+    icon_path = os.path.join(os.path.dirname(__file__), 'resource', 'icons', 'vexellogo.png')
     app.setWindowIcon(QIcon(icon_path))
     if args.folder_path:
         browser = PictureBrowser(args.folder_path)
