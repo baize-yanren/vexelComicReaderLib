@@ -1,0 +1,43 @@
+{
+    "main_window": {
+        "title": "Vexel漫画阅读器",
+        "status_bar": {
+            "total_comics": "共 {count} 本漫画"
+        },
+        "toolbar": {
+            "import": "导入漫画",
+            "settings": "设置",
+            "language": "语言"
+        },
+        "sidebar": {
+            "all_comics": "所有漫画",
+            "recently_read": "最近阅读",
+            "favorites": "收藏",
+            "categories": "分类"
+        }
+    },
+    "settings": {
+        "title": "设置",
+        "language": {
+            "label": "语言",
+            "zh_CN": "简体中文",
+            "en_US": "英语"
+        },
+        "theme": {
+            "label": "主题",
+            "light": "亮模式",
+            "dark": "暗模式"
+        },
+        "library_path": {
+            "label": "库路径",
+            "browse": "浏览...",
+            "browse_title": "选择库目录"
+        },
+        "cancel": "取消",
+        "save": "保存",
+        "error": {
+            "title": "错误",
+            "save_failed": "保存设置失败: {error}"
+        }
+    }
+}
