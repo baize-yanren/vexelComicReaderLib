@@ -3,7 +3,7 @@ import os
 import argparse
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QPushButton, QLabel, QScrollArea, QSizePolicy)
-from PyQt5.QtGui import QPixmap, QImage, QImageReader
+from PyQt5.QtGui import QPixmap, QImage, QImageReader, QIcon
 from PyQt5.QtCore import Qt, QByteArray, QTimer
 from PIL import Image, ImageQt, UnidentifiedImageError
 
@@ -20,7 +20,10 @@ class PictureBrowser(QMainWindow):
             self._initialize_browser()
         
     def initUI(self):
-        self.setWindowTitle('图片浏览器')
+        self.setWindowTitle('VexelViewer')
+        # 设置窗口图标
+        icon_path = "d:/Documents/GithubCode/comic-viewer/resource/icons/vexellogo.png"
+        self.setWindowIcon(QIcon(icon_path))
         self.setGeometry(100, 100, 600, 900)
         
         # 主部件和布局
@@ -214,6 +217,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     app = QApplication(sys.argv)
+    # 设置应用图标，确保任务栏显示
+    icon_path = "d:/Documents/GithubCode/comic-viewer/resource/icons/vexellogo.png"
+    app.setWindowIcon(QIcon(icon_path))
     if args.folder_path:
         browser = PictureBrowser(args.folder_path)
     else:
