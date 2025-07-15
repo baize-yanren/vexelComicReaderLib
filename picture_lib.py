@@ -118,13 +118,13 @@ class ComicLibraryWindow(QMainWindow):
         self.toolbar.setIconSize(QSize(24, 24))
 
         # 设置按钮
-        settings_action = QAction(QIcon(os.path.join("resource", "icons", "text_edit_icon.png")), 
+        settings_action = QAction(QIcon(os.path.join("resource", "icons", "settings.svg")), 
                                  self.i18n.get_text("main_window.toolbar.settings"), self)
         settings_action.triggered.connect(self.open_settings)
         self.toolbar.addAction(settings_action)
 
         # 导入漫画按钮
-        import_action = QAction(QIcon(os.path.join("resource", "icons", "save_icon.png")), 
+        import_action = QAction(QIcon(os.path.join("resource", "icons", "import.svg")), 
                                self.i18n.get_text("main_window.toolbar.import"), self)
         import_action.triggered.connect(self.import_comics)
         self.toolbar.addAction(import_action)
@@ -132,15 +132,15 @@ class ComicLibraryWindow(QMainWindow):
     def init_sidebar(self):
         # 添加侧边栏项
         items = [
-            ("all_comics", " vexellogo.png"),
-            ("recently_read", " clock_icon.png"),
-            ("favorites", " save_icon.png"),
-            ("categories", " painter_icon.png")
+            ("all_comics", ""),
+            ("recently_read", "clock_icon.png"),
+            ("favorites", "favourite.svg"),
+            ("categories", "painter_icon.png")
         ]
 
         for key, icon in items:
             item = QListWidgetItem(self.i18n.get_text(f"main_window.sidebar.{key}"))
-            icon_path = os.path.join(os.path.dirname(__file__), "resource", "icons", icon.strip())
+            icon_path = os.path.join(os.path.dirname(__file__), "resource", "icons", icon)
             item.setIcon(QIcon(icon_path))
             self.sidebar.addItem(item)
 
