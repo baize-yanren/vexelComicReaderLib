@@ -1,26 +1,43 @@
-# Comic Viewer
+# VexelCRL
 
-该项目提供从 7z、rar 等压缩包中解压图片并查看的功能，同时包含一个图片查看器，可在文件夹路径下的所有图片间切换。
+## 项目介绍
+VexelCRL是一个基于Python的图片管理器项目，主要用于管理和浏览漫画图片。它提供了一个简单易用的界面，支持多种图片格式的加载和显示，同时也支持图片的导航和缩放功能。
 
-## 环境准备
-1. 确保系统已安装 `7z`、`unrar` 和 `unzip` 命令行工具。
-2. 安装 Python 依赖：
-   ```bash
-   pip install -r requirements.txt
-   ```
+## 项目架构
+vexelComicReaderLib
+|---comicReader # 图片浏览器
+|
+|---comicLib    # 文件管理器
+|
+|---resource    # 资源目录
+|     |---icons     # 图标
+|
+|---requirement # 需求目录
+|
+|---settings    # 设置列表
+|
+|---LICENSE     # 许可证
+|
+|---README	    # 项目介绍
 
-## 解压并查看图片
-1. 将需要解压的压缩包路径替换 `unzip_and_view.py` 文件中的 `your_archive.7z`。
-2. 运行脚本：
-   ```bash
-   python unzip_and_view.py
-   ```
-3. 按回车键查看下一张图片。
+## 功能特点
+- 支持多种图片格式：JPG、PNG、GIF、BMP、TIFF、WebP等
+- 简洁直观的用户界面
+- 图片导航功能：首页、上一页、下一页
+- 自适应窗口大小的图片显示
+- 图片加载错误处理和状态显示
 
-## 使用图片查看器
-1. 运行脚本：
-   ```bash
-   python image_viewer.py
-   ```
-2. 点击 "打开文件夹" 按钮选择包含图片的文件夹。
-3. 使用 "上一张" 和 "下一张" 按钮切换图片。
+## 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+## 使用方法
+```bash
+python picture_browser.py [图片文件夹路径]
+```
+
+## 许可证
+本项目采用MIT许可证 - 详情参见LICENSE文件
+
+Copyright (c) 2025 维爪工作室VexelStudio
