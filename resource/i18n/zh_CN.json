@@ -1,43 +1,58 @@
 {
-    "main_window": {
-        "title": "Vexel漫画阅读器",
-        "status_bar": {
-            "total_comics": "共 {count} 本漫画"
-        },
-        "toolbar": {
-            "import": "导入漫画",
-            "settings": "设置",
-            "language": "语言"
-        },
-        "sidebar": {
-            "all_comics": "所有漫画",
-            "recently_read": "最近阅读",
-            "favorites": "收藏",
-            "categories": "分类"
-        }
+  "main_window": {
+    "title": "漫画库",
+    "status_bar": {
+      "total_comics": "总漫画数: {count}"
     },
-    "settings": {
-        "title": "设置",
-        "language": {
-            "label": "语言",
-            "zh_CN": "简体中文",
-            "en_US": "英语"
-        },
-        "theme": {
-            "label": "主题",
-            "light": "亮模式",
-            "dark": "暗模式"
-        },
-        "library_path": {
-            "label": "库路径",
-            "browse": "浏览...",
-            "browse_title": "选择库目录"
-        },
-        "cancel": "取消",
-        "save": "保存",
-        "error": {
-            "title": "错误",
-            "save_failed": "保存设置失败: {error}"
-        }
+    "toolbar": {
+      "settings": "设置",
+      "import": "导入"
+    },
+    "sidebar": {
+      "all_comics": "全部漫画",
+      "recently_read": "最近阅读",
+      "favorites": "收藏",
+      "categories": "分类"
     }
+  },
+  "settings": {
+    "title": "设置",
+    "language": {
+      "label": "语言",
+      "zh_CN": "简体中文",
+      "en_US": "英文"
+    },
+    "theme": {
+      "label": "主题",
+      "light": "浅色",
+      "dark": "深色"
+    },
+    "library_path": {
+      "label": "漫画库路径",
+      "browse": "浏览...",
+      "browse_title": "选择漫画库路径"
+    },
+    "buttons": {
+      "ok": "确定",
+      "cancel": "取消",
+      "apply": "应用",
+      "save": "保存"
+    }
+  },
+  "import": {
+    "comic": {
+      "title": "导入漫画",
+      "filter": "漫画文件和文件夹 (*.zip *.rar *.7z);;所有文件 (*)"
+    },
+    "error": {
+      "title": "导入错误",
+      "invalid_type": "不支持的文件类型",
+      "invalid_zip": "无效的压缩文件",
+      "details": "错误详情"
+    },
+    "success": "导入成功",
+    "success.title": "导入完成",
+    "success.message": "漫画已成功导入",
+    "failed": "导入失败"
+  }
 }

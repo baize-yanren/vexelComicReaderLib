@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt5.QtGui import QPixmap, QImage, QImageReader, QIcon
 from PyQt5.QtCore import Qt, QByteArray, QTimer
 from PIL import Image, ImageQt, UnidentifiedImageError
+import tempfile
+import shutil
+import zipfile
 
 class PictureBrowser(QMainWindow):
     def __init__(self, folder_path=None):
@@ -13,6 +16,7 @@ class PictureBrowser(QMainWindow):
         self.current_dir = folder_path
         self.image_files = []
         self.current_index = 0
+        self.temp_dirs = []  # 存储临时目录路径，用于清理
         
         self.initUI()
         if folder_path:
@@ -88,12 +92,20 @@ class PictureBrowser(QMainWindow):
     def load_image_files(self):
         # 支持的图片格式
         image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+        # 支持的压缩包格式
+        archive_extensions = ['.zip', '.rar', '.7z']
         self.image_files = []
         
         for filename in os.listdir(self.current_dir):
+            file_path = os.path.join(self.current_dir, filename)
             ext = os.path.splitext(filename)[1].lower()
+            
             if ext in image_extensions:
-                self.image_files.append(os.path.join(self.current_dir, filename))
+                self.image_files.append(file_path)
+            elif ext in archive_extensions:
+                # 处理压缩包，提取图片
+                archive_images = self._extract_archive_images(file_path)
+                self.image_files.extend(archive_images)
         
         # 按文件名排序
         self.image_files.sort()
@@ -203,14 +215,86 @@ class PictureBrowser(QMainWindow):
             self.status_label.setText("未找到图片文件或文件夹不存在")
     
     def set_image_folder(self, folder_path):
-        """设置图片文件夹路径并加载图片\n\n        Args:
-            folder_path (str): 图片文件夹绝对路径\n        Returns:
+        """设置图片文件夹路径并加载图片
+
+        Args:
+            folder_path (str): 图片文件夹绝对路径
+        Returns:
             bool: 加载成功返回True，否则返回False
         """
         self.current_dir = folder_path
         self.load_image_files()
         self._initialize_browser()
         return len(self.image_files) > 0
+
+    def _extract_archive_images(self, archive_path):
+        """从压缩包中提取图片文件路径"""
+        ext = os.path.splitext(archive_path)[1].lower()
+        temp_dir = None
+        
+        try:
+            temp_dir = tempfile.mkdtemp()
+            self.temp_dirs.append(temp_dir)
+            
+            # 根据不同压缩格式选择对应的解压方法
+            if ext == '.zip':
+                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+            elif ext == '.rar':
+                try:
+                    import rarfile
+                except ImportError:
+                    self.status_label.setText("错误：缺少rarfile库，无法处理RAR文件")
+                    return []
+                with rarfile.RarFile(archive_path, 'r') as rar_ref:
+                    rar_ref.extractall(temp_dir)
+            elif ext == '.7z':
+                try:
+                    import py7zr
+                except ImportError:
+                    self.status_label.setText("错误：缺少py7zr库，无法处理7Z文件")
+                    return []
+                with py7zr.SevenZipFile(archive_path, 'r') as sevenz_ref:
+                    sevenz_ref.extractall(temp_dir)
+            else:
+                self.status_label.setText(f"不支持的压缩格式：{ext}")
+                return []
+            
+            # 收集临时目录中的图片
+            image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+            archive_images = []
+            
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    file_ext = os.path.splitext(file)[1].lower()
+                    if file_ext in image_extensions:
+                        archive_images.append(os.path.join(root, file))
+            
+            # 按文件名排序
+            archive_images.sort()
+            return archive_images
+        except zipfile.BadZipFile:
+            self.status_label.setText("错误：无效的ZIP文件")
+        except Exception as e:
+            self.status_label.setText(f"处理压缩包时出错：{str(e)}")
+        finally:
+            if temp_dir and not archive_images:
+                # 如果提取失败，清理临时目录
+                try:
+                    shutil.rmtree(temp_dir)
+                    self.temp_dirs.remove(temp_dir)
+                except:
+                    pass
+        return []
+
+    def __del__(self):
+        """清理临时目录"""
+        for temp_dir in self.temp_dirs:
+            if os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception as e:
+                    print(f"清理临时目录失败：{temp_dir}, 错误：{str(e)}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='图片浏览器')

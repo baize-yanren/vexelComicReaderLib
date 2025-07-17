@@ -77,11 +77,11 @@ class SettingsDialog(QDialog):
         btn_layout.addStretch()
         
         # 取消按钮
-        cancel_btn = QPushButton(self.i18n.get_text("settings.cancel"))
+        cancel_btn = QPushButton(self.i18n.get_text("settings.buttons.cancel"))
         cancel_btn.clicked.connect(self.reject)
         
         # 保存按钮
-        save_btn = QPushButton(self.i18n.get_text("settings.save"))
+        save_btn = QPushButton(self.i18n.get_text("settings.buttons.save"))
         save_btn.clicked.connect(self.save_settings)
         
         btn_layout.addWidget(cancel_btn)

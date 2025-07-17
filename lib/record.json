@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "files": [
+    {
+      "id": "unique-identifier-1",
+      "basic_info": {
+        "name": "example_file",
+        "path": "/path/to/file",
+        "type": "folder",
+        "size": 1024,
+        "created_time": "2023-10-01T12:00:00Z",
+        "modified_time": "2023-10-01T12:00:00Z",
+        "import_time": "2023-10-01T12:00:00Z"
+      },
+      "metadata": {
+        "tags": ["tag1", "tag2"],
+        "favorite": false,
+        "rating": 0,
+        "custom_fields": {}
+      }
+    }
+  ]
+}

@@ -1,12 +1,18 @@
 import sys
 import os
 import json
+import uuid
+import zipfile
+import shutil
+from datetime import datetime
 from settings_dialog import SettingsDialog
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QToolBar, QAction, QSplitter, QListWidget,
-                            QListWidgetItem, QLabel, QStatusBar, QDialog)
+                            QListWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning, message='sipPyTypeDict() is deprecated')
 
 class I18nManager:
     def __init__(self):
@@ -151,8 +157,139 @@ class ComicLibraryWindow(QMainWindow):
             self.content_area.setText(f"显示 {current.text()} 内容")
 
     def import_comics(self):
-        # 实现漫画导入功能
-        self.status_bar.showMessage("导入漫画功能待实现")
+        # 打开文件选择对话框，支持选择文件和文件夹
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        dialog = QFileDialog(self, self.i18n.get_text("import.comic.title"), "", self.i18n.get_text("import.comic.filter"))
+        dialog.setFileMode(QFileDialog.ExistingFile | QFileDialog.Directory)
+        dialog.setOptions(options)
+
+        if dialog.exec_():
+            file_path = dialog.selectedFiles()[0]
+        else:
+            return
+
+        if not file_path:
+            return
+
+        try:
+            # 判断文件类型
+            if os.path.isdir(file_path):
+                self._import_folder(file_path)
+            elif file_path.endswith(('.zip', '.rar', '.7z')):
+                self._import_archive(file_path)
+            else:
+                QMessageBox.warning(self, self.i18n.get_text("import.error.title"),
+                                   self.i18n.get_text("import.error.invalid_type"))
+                return
+
+            self.status_bar.showMessage(self.i18n.get_text("import.success"))
+            QMessageBox.information(self, self.i18n.get_text("import.success.title"),
+                                   self.i18n.get_text("import.success.message"))
+        except Exception as e:
+            self.status_bar.showMessage(self.i18n.get_text("import.failed"))
+            QMessageBox.critical(self, self.i18n.get_text("import.error.title"),
+                               f"{self.i18n.get_text("import.error.details")}: {str(e)}")
+
+    def _import_folder(self, folder_path):
+        # 获取文件夹信息
+        folder_name = os.path.basename(folder_path)
+        size = self._get_folder_size(folder_path)
+        created_time = datetime.fromtimestamp(os.path.getctime(folder_path)).isoformat() + 'Z'
+        modified_time = datetime.fromtimestamp(os.path.getmtime(folder_path)).isoformat() + 'Z'
+        import_time = datetime.utcnow().isoformat() + 'Z'
+
+        # 创建文件记录
+        file_record = {
+            "id": str(uuid.uuid4()),
+            "basic_info": {
+                "name": folder_name,
+                "path": folder_path,
+                "type": "folder",
+                "size": size,
+                "created_time": created_time,
+                "modified_time": modified_time,
+                "import_time": import_time
+            },
+            "metadata": {
+                "tags": [],
+                "favorite": False,
+                "rating": 0,
+                "custom_fields": {}
+            }
+        }
+
+        self._update_record_json(file_record)
+
+    def _import_archive(self, archive_path):
+        # 获取压缩包信息
+        archive_name = os.path.basename(archive_path)
+        size = os.path.getsize(archive_path)
+        created_time = datetime.fromtimestamp(os.path.getctime(archive_path)).isoformat() + 'Z'
+        modified_time = datetime.fromtimestamp(os.path.getmtime(archive_path)).isoformat() + 'Z'
+        import_time = datetime.datetime.now(datetime.UTC).isoformat() + 'Z'
+        archive_type = os.path.splitext(archive_path)[1][1:].lower()
+
+        # 检查是否安装了必要的压缩包处理库
+        try:
+            import patoolib
+            from patoolib.util import PatoolError
+        except ImportError:
+            raise Exception(self.i18n.get_text("import.error.missing_library").format(library="patoolib"))
+
+        # 检查压缩包是否有效
+        try:
+            patoolib.test_archive(archive_path)
+        except PatoolError as e:
+            raise Exception(self.i18n.get_text("import.error.invalid_archive").format(type=archive_type, error=str(e)))
+
+        # 创建文件记录
+        file_record = {
+            "id": str(uuid.uuid4()),
+            "basic_info": {
+                "name": archive_name,
+                "path": archive_path,
+                "type": "archive",
+                "size": size,
+                "created_time": created_time,
+                "modified_time": modified_time,
+                "import_time": import_time,
+                "archive_type": archive_type
+            },
+            "metadata": {
+                "tags": [],
+                "favorite": False,
+                "rating": 0,
+                "custom_fields": {}
+            }
+        }
+
+        self._update_record_json(file_record)
+
+    def _get_folder_size(self, folder_path):
+        total_size = 0
+        for dirpath, dirnames, filenames in os.walk(folder_path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                total_size += os.path.getsize(fp)
+        return total_size
+
+    def _update_record_json(self, file_record):
+        record_path = os.path.join(os.path.dirname(__file__), 'lib', 'record.json')
+
+        # 读取现有记录
+        try:
+            with open(record_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {"version": "1.0", "files": []}
+
+        # 添加新记录
+        data["files"].append(file_record)
+
+        # 写入更新后的记录
+        with open(record_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
     def open_settings(self):
         dialog = SettingsDialog(self.i18n, self)

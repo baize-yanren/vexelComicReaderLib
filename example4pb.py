@@ -3,7 +3,8 @@ from PyQt5.QtWidgets import QApplication
 from picture_browser import PictureBrowser
 
 folder_path = ["D:/Documents/漫画/1/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]/2448070-[Shiokou Yakyuubu (Shio)] KENxSOU [Digital]",
-    "D:/Documents/漫画/1/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]"]
+    "D:/Documents/漫画/1/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組]",
+    "D:/Documents/漫画/1/3342520-[URAGERI (Ura Renga)][Traditional Chinese]強制健康檢查[自由獸漢化組].7z"]
 
 if __name__ == '__main__':
     # 必须先创建QApplication实例
@@ -16,7 +17,7 @@ if __name__ == '__main__':
     
     # 方法2：动态设置路径
     browser = PictureBrowser()
-    if browser.set_image_folder(folder_path[1]):
+    if browser.set_image_folder(folder_path[2]):
         browser.show()    
         # 启动应用程序事件循环
         sys.exit(app.exec_())
