@@ -6,53 +6,16 @@ import zipfile
 import shutil
 from datetime import datetime
 from settings_dialog import SettingsDialog
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QToolBar, QAction, QSplitter, QListWidget,
-                            QListWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox)
+from lib_func import I18nManager, format_file_size, ComicLibraryUtils
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QGroupBox, QPushButton, QFileDialog, QMessageBox, 
+                            QHBoxLayout, QToolBar, QAction, QSplitter, QTableWidget,
+                            QTableWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView)
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QFileInfo
 import warnings
 warnings.filterwarnings('ignore', category=DeprecationWarning, message='sipPyTypeDict() is deprecated')
 
-class I18nManager:
-    def __init__(self):
-        self.language = "zh_CN"
-        self.translations = {}
-        self.load_settings()
-        self.load_translations()
 
-    def load_settings(self):
-        try:
-            with open("settings.json", "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                self.language = settings.get("language", "zh_CN")
-        except Exception as e:
-            print(f"加载设置失败: {e}")
-
-    def load_translations(self):
-        try:
-            lang_file = os.path.join(os.path.dirname(__file__), "resource", "i18n", f"{self.language}.json")
-            with open(lang_file, "r", encoding="utf-8") as f:
-                self.translations = json.load(f)
-        except Exception as e:
-            print(f"加载语言文件失败: {e}")
-            # 加载默认中文
-            default_file = os.path.join(os.path.dirname(__file__), "resource", "i18n", "zh_CN.json")
-            with open(default_file, "r", encoding="utf-8") as f:
-                self.translations = json.load(f)
-
-    def get_text(self, key):
-        keys = key.split('.')
-        result = self.translations
-        for k in keys:
-            if isinstance(result, dict):
-                result = result.get(k, {})
-            else:
-                # 如果当前结果不是字典，无法继续解析，返回原始key
-                return key
-            if not result:
-                return key
-        return result
 
 class ComicLibraryWindow(QMainWindow):
     def __init__(self):
@@ -80,81 +43,350 @@ class ComicLibraryWindow(QMainWindow):
             self.setStyleSheet("")
         
     def initUI(self):
-        # 设置窗口标题和大小
-        self.setWindowTitle(self.i18n.get_text("main_window.title"))
-        self.resize(1280, 720)
-
-        # 设置窗口图标
-        icon_path = os.path.join(os.path.dirname(__file__), 'resource', 'icons', 'vexellogo.png')
-        self.setWindowIcon(QIcon(icon_path))
-
+        self.setWindowTitle(self.i18n.get_text('main_window.title'))
+        self.setGeometry(100, 100, 1200, 800)
+        
+        # 创建中心部件和布局
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+        
         # 创建工具栏
         self.create_toolbar()
-
-        # 创建主布局
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        main_layout = QVBoxLayout(main_widget)
-
-        # 创建分割器（3:7比例）
-        self.splitter = QSplitter(Qt.Horizontal)
-        # 设置初始分割比例（基于1280px宽度）
-        self.splitter.setSizes([384, 896])
-
-        # 左侧目录
-        self.sidebar = QListWidget()
-        self.init_sidebar()
-        self.splitter.addWidget(self.sidebar)
-
-        # 右侧内容区
-        self.content_area = QLabel("漫画内容展示区")
-        self.content_area.setAlignment(Qt.AlignCenter)
-        self.content_area.setStyleSheet("background-color: #f0f0f0;")
-        self.splitter.addWidget(self.content_area)
-
-        main_layout.addWidget(self.splitter)
-
+        
         # 创建状态栏
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage(self.i18n.get_text("main_window.status_bar.total_comics").format(count=0))
+        
+        # 创建主分割器
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.main_layout.addWidget(self.splitter)
+        
+        # 初始化侧边栏
+        self.init_sidebar()
+        self.scan_all_libraries()
+        
+        # 设置右侧内容区域为QTableWidget
+        self.right_content = QTableWidget()
+        self.right_content.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        
+        # 添加列标题
+        self.right_content.setColumnCount(3)
+        # 使用国际化文本设置表格列标题
+        self.right_content.setHorizontalHeaderLabels([
+            self.i18n.get_text('main_window.table.name'),
+            self.i18n.get_text('main_window.table.modified_date'),
+            self.i18n.get_text('main_window.table.size')
+        ])
+        
+        # 将侧边栏和内容区域添加到分割器
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(self.right_content)
+        
+        # 设置分割器初始大小
+        self.splitter.setSizes([300, 900])
+        
+        # 加载漫画库文件
+        self.load_library_files()
+    
+        # 重新应用主题以确保样式正确
+        self.load_theme_settings()
+        
+
+
+        # 更新侧边栏文本 - 修复QWidget没有count()方法的错误
+        # 假设原始侧边栏项目现在位于library_list中
+        if hasattr(self, 'library_list') and isinstance(self.library_list, QListWidget):
+            for i in range(self.library_list.count()):
+                item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
+                # 确保使用正确的国际化文本更新侧边栏项目
+                self.library_list.item(i).setText(self.i18n.get_text(f"main_window.sidebar.{item_key}"))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        splitter_width = self.splitter.width()
+        if splitter_width > 0:
+            left_width = int(splitter_width * 0.3)
+            right_width = splitter_width - left_width
+            self.splitter.setSizes([left_width, right_width])
 
     def create_toolbar(self):
-        self.toolbar = self.addToolBar("Main Toolbar")
+        self.toolbar = self.addToolBar('Main Toolbar')
         self.toolbar.setIconSize(QSize(24, 24))
-
+        
         # 设置按钮
-        settings_action = QAction(QIcon(os.path.join("resource", "icons", "settings.svg")), 
-                                 self.i18n.get_text("main_window.toolbar.settings"), self)
-        settings_action.triggered.connect(self.open_settings)
-        self.toolbar.addAction(settings_action)
-
+        self.settings_action = QAction(QIcon(os.path.join('resource', 'icons', 'settings.svg')), '', self)
+        self.settings_action.triggered.connect(self.open_settings_dialog)
+        self.toolbar.addAction(self.settings_action)
+        
         # 导入漫画按钮
-        import_action = QAction(QIcon(os.path.join("resource", "icons", "import.svg")), 
-                               self.i18n.get_text("main_window.toolbar.import"), self)
-        import_action.triggered.connect(self.import_comics)
-        self.toolbar.addAction(import_action)
+        self.import_action = QAction(QIcon(os.path.join('resource', 'icons', 'import.svg')), '', self)
+        self.import_action.triggered.connect(self.import_comics)
+        self.toolbar.addAction(self.import_action)
+        
+        return self.toolbar
+    
+    def open_settings_dialog(self):
+        dialog = SettingsDialog(self.i18n, self)
+        if dialog.exec_() == QDialog.Accepted:
+            # 重新加载语言设置
+            self.i18n.load_settings()
+            self.i18n.load_translations()
+            # 刷新UI文本
+            self.refresh_ui_text()
+    
+    def refresh_ui_text(self):
+        # 更新窗口标题
+        self.setWindowTitle(self.i18n.get_text('main_window.title'))
+        
+        # 更新工具栏文本
+        actions = self.toolbar.actions()
+        actions[0].setText(self.i18n.get_text('main_window.toolbar.settings'))
+        actions[1].setText(self.i18n.get_text('main_window.toolbar.import'))
+        
+        # 更新侧边栏文本
+        if hasattr(self, 'library_list') and isinstance(self.library_list, QListWidget):
+            for i in range(self.library_list.count()):
+                item_key = ['all_comics', 'recently_read', 'favorites', 'categories'][i]
+                self.library_list.item(i).setText(self.i18n.get_text(f'main_window.sidebar.{item_key}'))
+        
+        # 更新表格标题
+        self.right_content.setHorizontalHeaderLabels([
+            self.i18n.get_text('main_window.table.name'),
+            self.i18n.get_text('main_window.table.modified_date'),
+            self.i18n.get_text('main_window.table.size')
+        ])
+        
+        # 更新状态栏文本
+        if hasattr(self, 'total_comics'):
+            self.statusBar().showMessage(self.i18n.get_text('main_window.status_bar.total_comics').format(count=self.total_comics))
+        
+        # 更新导入对话框标题
+        if hasattr(self, 'import_action'):
+            self.import_action.setText(self.i18n.get_text('main_window.toolbar.import'))
+        
+        # 更新设置对话框标题
+        if hasattr(self, 'settings_action'):
+            self.settings_action.setText(self.i18n.get_text('main_window.toolbar.settings'))
+
+    def load_library_files(self, category=None):
+        self.right_content.clear()
+        try:
+            with open('lib/record.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 处理可能的JSON结构：直接是数组或包含在'records'键中
+                records = data if isinstance(data, list) else data.get('records', [])
+                
+            if category and category != '全部':
+                records = [r for r in records if isinstance(r, dict) and r.get('category') == category]
+                
+            self.statusBar().showMessage(f'共找到 {len(records)} 个文件')
+            
+            for record in records:
+                file_path = record.get('path')
+                if not file_path or not os.path.exists(file_path):
+                    continue
+                    
+                # 获取文件信息
+                file_info = QFileInfo(file_path)
+                file_name = file_info.fileName()
+                modified_time = file_info.lastModified().toString('yyyy-MM-dd HH:mm')
+                file_size = format_file_size(file_info.size())
+                
+                # 创建表格项
+                row = self.right_content.rowCount()
+                self.right_content.insertRow(row)
+                
+                # 名称列
+                name_item = QTableWidgetItem(file_name)
+                name_item.setIcon(icon)
+                name_item.setData(Qt.UserRole, file_path)
+                self.right_content.setItem(row, 0, name_item)
+                
+                # 修改日期列
+                date_item = QTableWidgetItem(modified_time)
+                date_item.setTextAlignment(Qt.AlignCenter)
+                self.right_content.setItem(row, 1, date_item)
+                
+                # 大小列
+                size_item = QTableWidgetItem(file_size)
+                size_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.right_content.setItem(row, 2, size_item)
+                
+            # 调整列宽
+            self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                
+        except Exception as e:
+            self.statusBar().showMessage(f'加载文件失败: {str(e)}')
+            print(f'Error loading library files: {e}')
+
+
 
     def init_sidebar(self):
-        # 添加侧边栏项
-        items = [
-            ("all_comics", ""),
-            ("recently_read", "clock_icon.png"),
-            ("favorites", "favourite.svg"),
-            ("categories", "painter_icon.png")
-        ]
+        # 创建侧边栏主容器
+        self.sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(5, 5, 5, 5)
+        sidebar_layout.setSpacing(10)
 
-        for key, icon in items:
-            item = QListWidgetItem(self.i18n.get_text(f"main_window.sidebar.{key}"))
-            icon_path = os.path.join(os.path.dirname(__file__), "resource", "icons", icon)
-            item.setIcon(QIcon(icon_path))
-            self.sidebar.addItem(item)
+        # 1. 库管理部分
+        self.library_group = QGroupBox("库管理")
+        library_layout = QVBoxLayout()
+        self.library_list = QListWidget()
+        self.add_library_btn = QPushButton("+ 添加库")
+        self.add_library_btn.clicked.connect(self.add_library)
+        library_layout.addWidget(self.library_list)
+        library_layout.addWidget(self.add_library_btn)
+        self.library_group.setLayout(library_layout)
 
-        self.sidebar.currentItemChanged.connect(self.on_sidebar_item_changed)
+        # 2. 作品集管理部分
+        self.collection_group = QGroupBox("作品集管理")
+        collection_layout = QVBoxLayout()
+        self.collection_list = QListWidget()
+        # 添加收藏列表
+        self.favorite_item = QListWidgetItem("收藏列表")
+        self.favorite_item.setData(Qt.UserRole, "favorites")
+        self.collection_list.addItem(self.favorite_item)
+        # 连接收藏列表点击事件
+        self.collection_list.currentItemChanged.connect(self.on_collection_item_changed)
+        collection_layout.addWidget(self.collection_list)
+        self.collection_group.setLayout(collection_layout)
 
+        # 3. 标签管理部分
+        self.tag_group = QGroupBox("标签管理")
+        tag_layout = QVBoxLayout()
+        self.tag_list = QListWidget()
+        tag_layout.addWidget(self.tag_list)
+        self.tag_group.setLayout(tag_layout)
+
+        # 添加到主布局
+        sidebar_layout.addWidget(self.library_group)
+        sidebar_layout.addWidget(self.collection_group)
+        sidebar_layout.addWidget(self.tag_group)
+
+        # 加载库配置
+        self.load_libraries_config()
+        # 连接信号
+        self.library_list.currentItemChanged.connect(self.on_library_changed)
+    
+    def load_libraries_config(self):
+        # 从lib-func加载库配置
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        
+        # 更新库列表显示
+        self.library_list.clear()
+        for lib in self.libraries:
+            item = QListWidgetItem(lib['name'])
+            item.setData(Qt.UserRole, lib['path'])
+            self.library_list.addItem(item)
+    
+    def add_library(self):
+        # 添加新库
+        dir_path = QFileDialog.getExistingDirectory(self, self.i18n.get_text('settings.library_path.browse_title'))
+        if dir_path:
+            lib_name = os.path.basename(dir_path)
+            # 检查是否已存在
+            for lib in self.libraries:
+                if lib['path'] == dir_path:
+                    QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_exists'))
+                    return
+            
+            # 创建record.json
+            record_path = os.path.join(dir_path, 'record.json')
+            if not os.path.exists(record_path):
+                with open(record_path, 'w', encoding='utf-8') as f:
+                    json.dump([], f, ensure_ascii=False, indent=2)
+            
+            # 更新配置
+            self.libraries.append({'name': lib_name, 'path': dir_path})
+            ComicLibraryUtils.save_libraries_config(self.libraries)
+            
+            # 更新列表
+            self.load_libraries_config()
+            self.scan_all_libraries()
+    
+    def scan_all_libraries(self):
+        # 从lib-func扫描所有库
+        self.all_records = ComicLibraryUtils.scan_all_libraries(self.libraries)
+        
+        # 更新作品集和标签
+        self.update_collections_and_tags()
+    
+    def update_collections_and_tags(self):
+        # 更新作品集和标签列表
+        collections = set()
+        tags = set()
+        
+        for record in self.all_records:
+            if isinstance(record, dict):
+                if 'collection' in record:
+                    collections.add(record['collection'])
+                if 'tags' in record and isinstance(record['tags'], list):
+                    tags.update(record['tags'])
+        
+        # 更新作品集列表
+        self.collection_list.clear()
+        # 添加收藏列表
+        self.favorite_item = QListWidgetItem("收藏列表")
+        self.favorite_item.setData(Qt.UserRole, "favorites")
+        self.collection_list.addItem(self.favorite_item)
+        # 添加其他作品集
+        for coll in sorted(collections):
+            self.collection_list.addItem(coll)
+        
+        # 更新标签列表
+        self.tag_list.clear()
+        for tag in sorted(tags):
+            self.tag_list.addItem(tag)
+    
+    def on_collection_item_changed(self, current, previous):
+        if not current:
+            return
+        item_type = current.data(Qt.UserRole)
+        if item_type == "favorites":
+            # 清空右侧内容区域
+            self.right_content.setRowCount(0)
+            # 遍历所有记录，筛选出收藏的作品
+            for record in self.all_records:
+                if record.get("favorite", False):
+                    row = self.right_content.rowCount()
+                    self.right_content.insertRow(row)
+                    self.right_content.setItem(row, 0, QTableWidgetItem(record.get("title", "未知作品")))
+                    self.right_content.setItem(row, 1, QTableWidgetItem(format_file_size(record.get("size", 0))))
+
+    def on_library_changed(self, current, previous):
+        if current:
+            lib_path = current.data(Qt.UserRole)
+            # 加载并显示库中的文件
+            self.right_content.setRowCount(0)
+            record_path = os.path.join(lib_path, 'record.json')
+            if os.path.exists(record_path):
+                with open(record_path, 'r', encoding='utf-8') as f:
+                    try:
+                        records = json.load(f)
+                        if isinstance(records, list):
+                            for i, record in enumerate(records):
+                                self.right_content.insertRow(i)
+                                basic_info = record.get('basic_info', {})
+                                self.right_content.setItem(i, 0, QTableWidgetItem(basic_info.get('name', '未知文件')))
+                                self.right_content.setItem(i, 1, QTableWidgetItem(self.format_size(basic_info.get('size', 0))))
+                    except json.JSONDecodeError:
+                        QMessageBox.warning(self, '错误', '无法解析该库的record.json文件')
+            else:
+                QMessageBox.warning(self, '错误', f'库目录下未找到record.json文件: {record_path}')
+                self.right_content.setRowCount(0)
+    
     def on_sidebar_item_changed(self, current, previous):
         if current:
-            self.content_area.setText(f"显示 {current.text()} 内容")
+            # 根据选择的侧边栏项筛选显示内容
+            item_text = current.text()
+            if item_text == self.i18n.get_text("main_window.sidebar.all_comics"):
+                self.load_library_files()  # 显示所有文件
+            else:
+                # 其他筛选逻辑可以在这里添加
+                self.right_content.setRowCount(0)
+                self.right_content.insertRow(0)
+                self.right_content.setItem(0, 0, QTableWidgetItem(f"显示 {item_text} 内容"))
 
     def import_comics(self):
         # 打开文件选择对话框，支持选择文件和文件夹
@@ -312,6 +544,31 @@ class ComicLibraryWindow(QMainWindow):
         actions[0].setText(self.i18n.get_text("main_window.toolbar.import"))
         actions[1].setText(self.i18n.get_text("main_window.toolbar.settings"))
 
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = ComicLibraryWindow()
+    window.show()
+    sys.exit(app.exec_())
+
+    def create_toolbar(self):
+        self.toolbar = self.addToolBar('Main Toolbar')
+        self.toolbar.setIconSize(QSize(24, 24))
+        
+        # 设置按钮
+        self.settings_action = QAction(QIcon(os.path.join('resource', 'icons', 'settings.svg')), '设置', self)
+        self.settings_action.triggered.connect(self.open_settings)
+        self.toolbar.addAction(self.settings_action)
+        
+        # 导入漫画按钮
+        self.import_action = QAction(QIcon(os.path.join('resource', 'icons', 'import.svg')), '导入漫画', self)
+        self.import_action.triggered.connect(self.import_comic)
+        self.toolbar.addAction(self.import_action)
+        
+        # 更新工具栏文本
+        actions = self.toolbar.actions()
+        actions[0].setText(self.i18n.get_text("main_window.toolbar.import"))
+        actions[1].setText(self.i18n.get_text("main_window.toolbar.settings"))
+
         # 更新侧边栏文本
         for i in range(self.sidebar.count()):
             item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
@@ -330,3 +587,73 @@ if __name__ == "__main__":
     window = ComicLibraryWindow()
     window.show()
     sys.exit(app.exec_())
+
+    def create_toolbar(self):
+        self.toolbar = self.addToolBar('Main Toolbar')
+        self.toolbar.setIconSize(QSize(24, 24))
+        
+        # 设置按钮
+        self.settings_action = QAction(QIcon(os.path.join('resource', 'icons', 'settings.svg')), '设置', self)
+        self.settings_action.triggered.connect(self.open_settings)
+        self.toolbar.addAction(self.settings_action)
+        
+        # 导入漫画按钮
+        self.import_action = QAction(QIcon(os.path.join('resource', 'icons', 'import.svg')), '导入漫画', self)
+        self.import_action.triggered.connect(self.import_comic)
+        self.toolbar.addAction(self.import_action)
+        
+        # 更新工具栏文本
+        actions = self.toolbar.actions()
+        actions[0].setText(self.i18n.get_text("main_window.toolbar.import"))
+        actions[1].setText(self.i18n.get_text("main_window.toolbar.settings"))
+
+        # 更新侧边栏文本
+        for i in range(self.sidebar.count()):
+            item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
+            self.sidebar.item(i).setText(self.i18n.get_text(f"main_window.sidebar.{item_key}"))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        splitter_width = self.splitter.width()
+        if splitter_width > 0:
+            left_width = int(splitter_width * 0.3)
+            right_width = splitter_width - left_width
+            self.splitter.setSizes([left_width, right_width])
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = ComicLibraryWindow()
+    window.show()
+    sys.exit(app.exec_())
+
+    def create_toolbar(self):
+        self.toolbar = self.addToolBar('Main Toolbar')
+        self.toolbar.setIconSize(QSize(24, 24))
+        
+        # 设置按钮
+        self.settings_action = QAction(QIcon(os.path.join('resource', 'icons', 'settings.svg')), '设置', self)
+        self.settings_action.triggered.connect(self.open_settings)
+        self.toolbar.addAction(self.settings_action)
+        
+        # 导入漫画按钮
+        self.import_action = QAction(QIcon(os.path.join('resource', 'icons', 'import.svg')), '导入漫画', self)
+        self.import_action.triggered.connect(self.import_comic)
+        self.toolbar.addAction(self.import_action)
+        
+        # 更新工具栏文本
+        actions = self.toolbar.actions()
+        actions[0].setText(self.i18n.get_text("main_window.toolbar.import"))
+        actions[1].setText(self.i18n.get_text("main_window.toolbar.settings"))
+
+        # 更新侧边栏文本
+        for i in range(self.sidebar.count()):
+            item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
+            self.sidebar.item(i).setText(self.i18n.get_text(f"main_window.sidebar.{item_key}"))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        splitter_width = self.splitter.width()
+        if splitter_width > 0:
+            left_width = int(splitter_width * 0.3)
+            right_width = splitter_width - left_width
+            self.splitter.setSizes([left_width, right_width])

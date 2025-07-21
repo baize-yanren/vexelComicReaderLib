@@ -13,6 +13,11 @@
       "recently_read": "最近阅读",
       "favorites": "收藏",
       "categories": "分类"
+    },
+    "table": {
+      "name": "名称",
+      "modified_date": "修改日期",
+      "size": "大小"
     }
   },
   "settings": {

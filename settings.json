@@ -1,10 +1,10 @@
 {
-    "language": "zh_CN",
-    "window_size": [
-        1280,
-        720
+    "libraries": [
+        {
+            "name": "lib",
+            "path": "E:/temp/lib"
+        }
     ],
-    "comic_library_path": "",
-    "theme": "light",
-    "library_path": "D:/Documents/GithubCode/vexelComicReaderLib/lib"
+    "language": "zh_CN",
+    "theme": "light"
 }

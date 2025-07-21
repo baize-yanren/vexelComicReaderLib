@@ -14,6 +14,11 @@
             "recently_read": "Recently Read",
             "favorites": "Favorites",
             "categories": "Categories"
+        },
+        "table": {
+            "name": "Name",
+            "modified_date": "Modified Date",
+            "size": "Size"
         }
     },
     "settings": {
@@ -33,11 +38,31 @@
             "browse": "Browse...",
             "browse_title": "Select Library Directory"
         },
-        "cancel": "Cancel",
-        "save": "Save",
+        "buttons": {
+            "ok": "OK",
+            "cancel": "Cancel",
+            "apply": "Apply",
+            "save": "Save"
+        },
         "error": {
             "title": "Error",
             "save_failed": "Failed to save settings: {error}"
         }
+    },
+    "import": {
+        "comic": {
+            "title": "Import Comics",
+            "filter": "Comic files and folders (*.zip *.rar *.7z);;All files (*)"
+        },
+        "error": {
+            "title": "Import Error",
+            "invalid_type": "Unsupported file type",
+            "invalid_zip": "Invalid archive file",
+            "details": "Error details"
+        },
+        "success": "Import successful",
+        "success.title": "Import Complete",
+        "success.message": "Comics imported successfully",
+        "failed": "Import failed"
     }
 }

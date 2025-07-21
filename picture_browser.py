@@ -147,7 +147,7 @@ class PictureBrowser(QMainWindow):
                     self.image_label.setPixmap(pixmap)
                 
                 QTimer.singleShot(0, adjust_initial_image)
-                self.status_label.setText(f"图片 {self.current_index + 1}/{len(self.image_files)}: {os.path.basename(image_path)}")
+                self.status_label.setText(f"{self.current_index + 1}/{len(self.image_files)}: {os.path.basename(image_path)}")
             except ValueError as e:
                 error_msg = f"""无法读取图片: {os.path.basename(image_path)}
 错误信息: {str(e)}"""
