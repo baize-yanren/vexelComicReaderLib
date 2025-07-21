@@ -9,7 +9,7 @@ from settings_dialog import SettingsDialog
 from lib_func import I18nManager, format_file_size, ComicLibraryUtils
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QGroupBox, QPushButton, QFileDialog, QMessageBox, 
                             QHBoxLayout, QToolBar, QAction, QSplitter, QTableWidget,
-                            QTableWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView)
+                            QTableWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView, QInputDialog, QLineEdit)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize, QFileInfo
 import warnings
@@ -144,9 +144,10 @@ class ComicLibraryWindow(QMainWindow):
         actions[0].setText(self.i18n.get_text('main_window.toolbar.settings'))
         actions[1].setText(self.i18n.get_text('main_window.toolbar.import'))
         
-        # 更新侧边栏文本
+        # 更新侧边栏文本 - 仅更新前4个固定项
         if hasattr(self, 'library_list') and isinstance(self.library_list, QListWidget):
-            for i in range(self.library_list.count()):
+            # 只更新前4个固定分类项，不更新实际库名称
+            for i in range(min(4, self.library_list.count())):
                 item_key = ['all_comics', 'recently_read', 'favorites', 'categories'][i]
                 self.library_list.item(i).setText(self.i18n.get_text(f'main_window.sidebar.{item_key}'))
         
@@ -268,6 +269,9 @@ class ComicLibraryWindow(QMainWindow):
         self.load_libraries_config()
         # 连接信号
         self.library_list.currentItemChanged.connect(self.on_library_changed)
+        # 启用库名称双击编辑
+        self.library_list.itemDoubleClicked.connect(self.edit_library_name)
+        self.library_list.setEditTriggers(QAbstractItemView.NoEditTriggers)
     
     def load_libraries_config(self):
         # 从lib-func加载库配置
@@ -354,27 +358,51 @@ class ComicLibraryWindow(QMainWindow):
                     self.right_content.setItem(row, 0, QTableWidgetItem(record.get("title", "未知作品")))
                     self.right_content.setItem(row, 1, QTableWidgetItem(format_file_size(record.get("size", 0))))
 
+    def edit_library_name(self, item):
+        # 跳过前4个固定分类项
+        if self.library_list.row(item) < 4:
+            return
+
+        # 创建编辑对话框
+        new_name, ok = QInputDialog.getText(self, self.i18n.get_text('library.edit_title'),
+                                           self.i18n.get_text('library.enter_new_name'),
+                                           QLineEdit.Normal, item.text())
+
+        if ok and new_name and new_name != item.text():
+            # 查找并更新库配置
+            lib_index = self.library_list.row(item) - 4  # 减去固定项数量
+            if 0 <= lib_index < len(self.libraries):
+                self.libraries[lib_index]['name'] = new_name
+                ComicLibraryUtils.save_libraries_config(self.libraries)
+                item.setText(new_name)
+
     def on_library_changed(self, current, previous):
         if current:
             lib_path = current.data(Qt.UserRole)
-            # 加载并显示库中的文件
+            # 筛选当前库的记录并显示
             self.right_content.setRowCount(0)
-            record_path = os.path.join(lib_path, 'record.json')
-            if os.path.exists(record_path):
-                with open(record_path, 'r', encoding='utf-8') as f:
-                    try:
-                        records = json.load(f)
-                        if isinstance(records, list):
-                            for i, record in enumerate(records):
-                                self.right_content.insertRow(i)
-                                basic_info = record.get('basic_info', {})
-                                self.right_content.setItem(i, 0, QTableWidgetItem(basic_info.get('name', '未知文件')))
-                                self.right_content.setItem(i, 1, QTableWidgetItem(self.format_size(basic_info.get('size', 0))))
-                    except json.JSONDecodeError:
-                        QMessageBox.warning(self, '错误', '无法解析该库的record.json文件')
-            else:
-                QMessageBox.warning(self, '错误', f'库目录下未找到record.json文件: {record_path}')
-                self.right_content.setRowCount(0)
+            # 清空之前的表格内容
+            self.right_content.clearContents()
+            
+            # 筛选属于当前库的记录
+            library_records = [r for r in self.all_records if isinstance(r, dict) and r.get('basic_info', {}).get('path', '').startswith(lib_path)]
+            
+            for row, record in enumerate(library_records):
+                basic_info = record.get('basic_info', {})
+                file_name = basic_info.get('name', '未知文件')
+                modified_time = basic_info.get('modified_time', '未知时间')
+                file_size = format_file_size(basic_info.get('size', 0))
+                
+                # 插入新行
+                self.right_content.insertRow(row)
+                
+                # 设置表格内容
+                self.right_content.setItem(row, 0, QTableWidgetItem(file_name))
+                self.right_content.setItem(row, 1, QTableWidgetItem(modified_time))
+                self.right_content.setItem(row, 2, QTableWidgetItem(file_size))
+            
+            # 调整列宽
+            self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
     
     def on_sidebar_item_changed(self, current, previous):
         if current:
