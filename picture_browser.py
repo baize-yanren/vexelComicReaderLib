@@ -223,58 +223,91 @@ class PictureBrowser(QMainWindow):
             bool: 加载成功返回True，否则返回False
         """
         self.current_dir = folder_path
-        self.load_image_files()
+        self.image_files = []
+        # 检查是否为压缩包文件
+        if os.path.isfile(self.current_dir):
+            ext = os.path.splitext(self.current_dir)[1].lower()
+            if ext in ['.zip', '.rar', '.7z']:
+                self.image_files = self._extract_archive_images(self.current_dir)
+            else:
+                return False
+        elif os.path.isdir(self.current_dir):
+            self.load_image_files()
+        else:
+            return False
         self._initialize_browser()
         return len(self.image_files) > 0
 
     def _extract_archive_images(self, archive_path):
-        """从压缩包中提取图片文件路径"""
-        ext = os.path.splitext(archive_path)[1].lower()
+        import os
+        import shutil
+        import tempfile
+        from zipfile import ZipFile, BadZipFile
+
+        # 初始化变量防止UnboundLocalError
+        archive_images = []
         temp_dir = None
-        
+        rarfile = None
+        py7zr = None
+
         try:
+            import rarfile
+        except ImportError:
+            error_msg = "错误：缺少rarfile库，请使用pip install rarfile==4.0安装"
+            self.status_label.setText(error_msg)
+            print(error_msg)
+            return []
+
+        try:
+            import py7zr
+        except ImportError:
+            error_msg = "错误：缺少py7zr库，请使用pip install py7zr==0.21.0安装"
+            self.status_label.setText(error_msg)
+            print(error_msg)
+            return []
+
+        try:
+            ext = os.path.splitext(archive_path)[1].lower()
             temp_dir = tempfile.mkdtemp()
             self.temp_dirs.append(temp_dir)
-            
-            # 根据不同压缩格式选择对应的解压方法
+
             if ext == '.zip':
-                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                with ZipFile(archive_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
             elif ext == '.rar':
-                try:
-                    import rarfile
-                except ImportError:
-                    self.status_label.setText("错误：缺少rarfile库，无法处理RAR文件")
+                if not rarfile:
+                    self.status_label.setText("错误：rarfile库未正确加载")
                     return []
                 with rarfile.RarFile(archive_path, 'r') as rar_ref:
                     rar_ref.extractall(temp_dir)
             elif ext == '.7z':
-                try:
-                    import py7zr
-                except ImportError:
-                    self.status_label.setText("错误：缺少py7zr库，无法处理7Z文件")
+                if not py7zr:
+                    self.status_label.setText("错误：py7zr库未正确加载")
                     return []
                 with py7zr.SevenZipFile(archive_path, 'r') as sevenz_ref:
                     sevenz_ref.extractall(temp_dir)
             else:
                 self.status_label.setText(f"不支持的压缩格式：{ext}")
                 return []
-            
+
             # 收集临时目录中的图片
             image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
-            archive_images = []
-            
+
             for root, dirs, files in os.walk(temp_dir):
                 for file in files:
                     file_ext = os.path.splitext(file)[1].lower()
                     if file_ext in image_extensions:
                         archive_images.append(os.path.join(root, file))
-            
+
             # 按文件名排序
             archive_images.sort()
             return archive_images
-        except zipfile.BadZipFile:
+        except ZipFile.BadZipFile:
             self.status_label.setText("错误：无效的ZIP文件")
+        except rarfile.RarCannotExec:
+            self.status_label.setText("错误：RAR文件处理失败，请确保已安装unrar工具")
+        except rarfile.BadRarFile:
+            self.status_label.setText("错误：无效的RAR文件")
         except Exception as e:
             self.status_label.setText(f"处理压缩包时出错：{str(e)}")
         finally:
