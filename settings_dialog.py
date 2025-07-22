@@ -3,6 +3,7 @@ import json
 import os
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
                             QPushButton, QWidget, QMessageBox, QRadioButton, QButtonGroup, QLineEdit, QFileDialog)
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 
 class SettingsDialog(QDialog):
@@ -14,6 +15,7 @@ class SettingsDialog(QDialog):
 
     def initUI(self):
         self.setWindowTitle(self.i18n.get_text("settings.title"))
+        self.setWindowIcon(QIcon(os.path.join('resource', 'icons', 'vexellogo.png')))
         self.setMinimumWidth(300)
 
         # 创建主布局

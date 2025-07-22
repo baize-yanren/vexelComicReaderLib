@@ -44,6 +44,7 @@ class ComicLibraryWindow(QMainWindow):
         
     def initUI(self):
         self.setWindowTitle(self.i18n.get_text('main_window.title'))
+        self.setWindowIcon(QIcon(os.path.join('resource', 'icons', 'vexellogo.png')))
         self.setGeometry(100, 100, 1200, 800)
         
         # 创建中心部件和布局
@@ -173,7 +174,7 @@ class ComicLibraryWindow(QMainWindow):
     def load_library_files(self, category=None):
         self.right_content.clear()
         try:
-            with open('lib/record.json', 'r', encoding='utf-8') as f:
+            with open('resource/record.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 # 处理可能的JSON结构：直接是数组或包含在'records'键中
                 records = data if isinstance(data, list) else data.get('records', [])
@@ -275,7 +276,13 @@ class ComicLibraryWindow(QMainWindow):
     
     def load_libraries_config(self):
         # 从lib-func加载库配置
-        self.libraries = ComicLibraryUtils.load_libraries_config()
+        # 确保返回值为列表类型
+        # 添加异常处理确保配置加载失败时程序稳定
+        try:
+            self.libraries = ComicLibraryUtils.load_libraries_config() or []
+        except Exception as e:
+            print(f"加载库配置失败: {str(e)}")
+            self.libraries = []
         
         # 更新库列表显示
         self.library_list.clear()
@@ -287,6 +294,8 @@ class ComicLibraryWindow(QMainWindow):
     def add_library(self):
         # 添加新库
         dir_path = QFileDialog.getExistingDirectory(self, self.i18n.get_text('settings.library_path.browse_title'))
+        if not dir_path:
+            return
         if dir_path:
             lib_name = os.path.basename(dir_path)
             # 检查是否已存在
@@ -295,19 +304,38 @@ class ComicLibraryWindow(QMainWindow):
                     QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_exists'))
                     return
             
-            # 创建record.json
-            record_path = os.path.join(dir_path, 'record.json')
-            if not os.path.exists(record_path):
-                with open(record_path, 'w', encoding='utf-8') as f:
-                    json.dump([], f, ensure_ascii=False, indent=2)
+            # 调用ComicLibraryUtils创建新库
+            success = ComicLibraryUtils.create_new_library(dir_path)
+            if not success:
+                QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_creation_failed'))
+                return
             
-            # 更新配置
-            self.libraries.append({'name': lib_name, 'path': dir_path})
-            ComicLibraryUtils.save_libraries_config(self.libraries)
-            
-            # 更新列表
-            self.load_libraries_config()
-            self.scan_all_libraries()
+        # 更新配置
+        self.libraries.append({'name': lib_name, 'path': dir_path})
+        ComicLibraryUtils.save_libraries_config(self.libraries)
+        
+        # 更新列表
+        # 刷新库列表并保留默认分类
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        self.library_list.clear()
+        
+        # 重新添加默认分类
+        default_categories = [
+            self.i18n.get_text('main_window.sidebar.all_comics'),
+            self.i18n.get_text('main_window.sidebar.recently_read'),
+            self.i18n.get_text('main_window.sidebar.favorites'),
+            self.i18n.get_text('main_window.sidebar.categories')
+        ]
+        for cat in default_categories:
+            item = QListWidgetItem(cat)
+            self.library_list.addItem(item)
+        
+        # 添加用户库
+        for lib in self.libraries:
+            item = QListWidgetItem(lib['name'])
+            item.setData(Qt.UserRole, lib['path'])
+            self.library_list.addItem(item)
+        self.scan_all_libraries()
     
     def scan_all_libraries(self):
         # 从lib-func扫描所有库
@@ -535,7 +563,7 @@ class ComicLibraryWindow(QMainWindow):
         return total_size
 
     def _update_record_json(self, file_record):
-        record_path = os.path.join(os.path.dirname(__file__), 'lib', 'record.json')
+        record_path = os.path.join(os.path.dirname(__file__), 'resource', 'record.json')
 
         # 读取现有记录
         try:

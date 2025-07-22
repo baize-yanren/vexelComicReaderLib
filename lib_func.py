@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 from PyQt5.QtWidgets import QMessageBox
 
 class I18nManager:
@@ -72,6 +73,70 @@ class ComicLibraryUtils:
         config_path = os.path.join(os.path.dirname(__file__), 'settings.json')
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump({'libraries': libraries}, f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def create_new_library(folder_path):
+        """创建新库并初始化结构
+
+        Args:
+            folder_path: 库的根目录路径
+
+        Returns:
+            新创建库的ID
+
+        Raises:
+            ValueError: 当文件夹路径无效或已存在同名库时
+        """
+        # 验证文件夹路径
+        if not os.path.exists(folder_path):
+            raise ValueError(f"文件夹不存在: {folder_path}")
+        if not os.path.isdir(folder_path):
+            raise ValueError(f"不是有效的文件夹: {folder_path}")
+
+        # 获取资源目录路径
+        resource_dir = os.path.join(os.path.dirname(__file__), 'resource')
+        os.makedirs(resource_dir, exist_ok=True)
+
+        # 创建cover文件夹
+        cover_dir = os.path.join(resource_dir, 'cover')
+        os.makedirs(cover_dir, exist_ok=True)
+
+        # 处理record.json
+        record_path = os.path.join(resource_dir, 'record.json')
+        if os.path.exists(record_path):
+            with open(record_path, 'r', encoding='utf-8') as f:
+                record_data = json.load(f)
+        else:
+            record_data = {"version": "1.0", "libraries": []}
+
+        # 生成库ID和名称
+        lib_id = str(uuid.uuid4())
+        lib_name = os.path.basename(folder_path)
+
+        # 检查库是否已存在
+        for lib in record_data.get('libraries', []):
+            if lib.get('path') == folder_path:
+                raise ValueError(f"库已存在: {folder_path}")
+
+        # 添加新库到record_data
+        new_lib = {
+            "id": lib_id,
+            "name": lib_name,
+            "path": folder_path,
+            "comics": []  # 存储漫画信息，格式: [{"id": "", "name": "", "path": "", "cover": ""}, ...]
+        }
+        record_data['libraries'].append(new_lib)
+
+        # 保存record.json
+        with open(record_path, 'w', encoding='utf-8') as f:
+            json.dump(record_data, f, ensure_ascii=False, indent=2)
+
+        # 更新库配置（settings.json）
+        current_libraries = ComicLibraryUtils.load_libraries_config()
+        current_libraries.append({"name": lib_name, "path": folder_path})
+        ComicLibraryUtils.save_libraries_config(current_libraries)
+
+        return lib_id
 
     @staticmethod
     def scan_all_libraries(libraries):
