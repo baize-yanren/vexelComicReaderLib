@@ -18,7 +18,7 @@ if __name__ == '__main__':
     
     # 方法2：动态设置路径
     browser = PictureBrowser()
-    if browser.set_image_folder(folder_path[1]):
+    if browser.set_image_folder(folder_path[3]):
         browser.show()    
         # 启动应用程序事件循环
         sys.exit(app.exec_())

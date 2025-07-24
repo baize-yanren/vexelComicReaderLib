@@ -13,11 +13,22 @@
         "import_time": "2023-10-01T12:00:00Z"
       },
       "metadata": {
-        "tags": ["tag1", "tag2"],
+        "tags": [
+          "tag1",
+          "tag2"
+        ],
         "favorite": false,
         "rating": 0,
         "custom_fields": {}
       }
+    }
+  ],
+  "libraries": [
+    {
+      "id": "b7efa6bd-b300-4faa-aa1b-8ed0732f5dd2",
+      "name": "lib2",
+      "path": "E:/temp/lib2",
+      "comics": []
     }
   ]
 }

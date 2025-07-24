@@ -1,10 +1,12 @@
 {
-    "libraries": [
-        {
-            "name": "lib",
-            "path": "E:/temp/lib"
-        }
-    ],
-    "language": "zh_CN",
-    "theme": "light"
+  "libraries": [
+    {
+      "name": "lib",
+      "path": "E:/temp/lib"
+    },
+    {
+      "name": "lib2",
+      "path": "E:/temp/lib2"
+    }
+  ]
 }

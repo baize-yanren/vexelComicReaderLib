@@ -1,6 +1,16 @@
+'''
+@version 1.0
+@brief 库管理前端主代码
+@author 炎刃
+@date 2025-07-24
+'''
+
+import os
+import datetime
 import sys
 import os
 import json
+import datetime
 import uuid
 import zipfile
 import shutil
@@ -11,7 +21,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QHBoxLayout, QToolBar, QAction, QSplitter, QTableWidget,
                             QTableWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView, QInputDialog, QLineEdit)
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt, QSize, QFileInfo
+from PyQt5.QtCore import Qt, QSize, QFileInfo, QDir
 import warnings
 warnings.filterwarnings('ignore', category=DeprecationWarning, message='sipPyTypeDict() is deprecated')
 
@@ -20,6 +30,14 @@ warnings.filterwarnings('ignore', category=DeprecationWarning, message='sipPyTyp
 class ComicLibraryWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.all_records = []
+        self.libraries = []
+        try:
+            self.libraries = ComicLibraryUtils.load_libraries_config() or []
+        except Exception as e:
+            print(f"加载库配置失败: {e}")
+            self.libraries = []
+        self.scan_all_libraries()
         self.i18n = I18nManager()
         self.load_theme_settings()
         self.initUI()
@@ -42,6 +60,26 @@ class ComicLibraryWindow(QMainWindow):
         else:
             self.setStyleSheet("")
         
+    def scan_all_libraries(self):
+        # 扫描所有库并收集记录
+        self.all_records = []
+        for lib in self.libraries:
+            lib_path = lib.get('path')
+            if lib_path and os.path.exists(lib_path):
+                # 调用工具类扫描库内容
+                records = ComicLibraryUtils.scan_library(lib_path)
+                self.all_records.extend(records)
+
+    def open_comic_file(self, index):
+        if index.isValid():
+            item = self.right_content.item(index.row(), 0)
+            if item:
+                file_path = item.data(Qt.UserRole)
+                if file_path and os.path.exists(file_path):
+                    from picture_browser import ComicBrowser
+                    self.browser = ComicBrowser(file_path)
+                    self.browser.show()
+    
     def initUI(self):
         self.setWindowTitle(self.i18n.get_text('main_window.title'))
         self.setWindowIcon(QIcon(os.path.join('resource', 'icons', 'vexellogo.png')))
@@ -51,6 +89,10 @@ class ComicLibraryWindow(QMainWindow):
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.main_layout = QVBoxLayout(self.central_widget)
+        
+        # 提前初始化右侧内容区域，确保属性存在
+        self.right_content = QTableWidget()
+        self.right_content.setSelectionMode(QAbstractItemView.ExtendedSelection)
         
         # 创建工具栏
         self.create_toolbar()
@@ -63,14 +105,6 @@ class ComicLibraryWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         self.main_layout.addWidget(self.splitter)
         
-        # 初始化侧边栏
-        self.init_sidebar()
-        self.scan_all_libraries()
-        
-        # 设置右侧内容区域为QTableWidget
-        self.right_content = QTableWidget()
-        self.right_content.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        
         # 添加列标题
         self.right_content.setColumnCount(3)
         # 使用国际化文本设置表格列标题
@@ -79,6 +113,15 @@ class ComicLibraryWindow(QMainWindow):
             self.i18n.get_text('main_window.table.modified_date'),
             self.i18n.get_text('main_window.table.size')
         ])
+        # 设置表格属性
+        self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.right_content.verticalHeader().setVisible(False)
+        self.right_content.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.right_content.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.right_content.doubleClicked.connect(self.open_comic_file)
+        
+        # 初始化侧边栏
+        self.init_sidebar()
         
         # 将侧边栏和内容区域添加到分割器
         self.splitter.addWidget(self.sidebar)
@@ -87,7 +130,13 @@ class ComicLibraryWindow(QMainWindow):
         # 设置分割器初始大小
         self.splitter.setSizes([300, 900])
         
-        # 加载漫画库文件
+        # 连接库列表选择事件
+        self.library_list.itemClicked.connect(self.on_library_selected)
+        # 初始加载所有漫画
+        # 确保从配置加载库并刷新UI
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        self.refresh_ui_text()
+        self.scan_all_libraries()
         self.load_library_files()
     
         # 重新应用主题以确保样式正确
@@ -98,8 +147,9 @@ class ComicLibraryWindow(QMainWindow):
         # 更新侧边栏文本 - 修复QWidget没有count()方法的错误
         # 假设原始侧边栏项目现在位于library_list中
         if hasattr(self, 'library_list') and isinstance(self.library_list, QListWidget):
-            for i in range(self.library_list.count()):
-                item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
+            item_keys = ["all_comics", "recently_read"]
+            for i in range(min(len(item_keys), self.library_list.count())):
+                item_key = item_keys[i]
                 # 确保使用正确的国际化文本更新侧边栏项目
                 self.library_list.item(i).setText(self.i18n.get_text(f"main_window.sidebar.{item_key}"))
 
@@ -110,6 +160,179 @@ class ComicLibraryWindow(QMainWindow):
             left_width = int(splitter_width * 0.3)
             right_width = splitter_width - left_width
             self.splitter.setSizes([left_width, right_width])
+
+    def add_library(self):
+        dir_path = QFileDialog.getExistingDirectory(self, self.i18n.get_text('settings.dialog.select_library'), QDir.homePath())
+        if not dir_path:
+            return
+        
+        lib_name = os.path.basename(dir_path)
+        # 检查是否已存在
+        for lib in self.libraries:
+            if lib['path'] == dir_path:
+                QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_exists'))
+                return
+        
+        # 调用ComicLibraryUtils创建新库
+        success = ComicLibraryUtils.create_new_library(dir_path)
+        if not success:
+            QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_creation_failed'))
+            return
+        
+        # 更新配置
+        self.libraries.append({'name': lib_name, 'path': dir_path})
+        ComicLibraryUtils.save_libraries_config(self.libraries)
+        
+        # 更新列表
+        # 刷新库列表并保留默认分类
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        self.library_list.clear()
+        
+        # 重新添加默认分类
+        default_categories = [
+            self.i18n.get_text('main_window.sidebar.all_comics'),
+            self.i18n.get_text('main_window.sidebar.recently_read')
+        ]
+        # 使用zip确保分类与键一一对应，避免索引错误
+        item_keys = ["all_comics", "recently_read"]
+        for cat, key in zip(default_categories, item_keys):
+            item = QListWidgetItem(cat)
+            item.setData(Qt.UserRole, key)
+            self.library_list.addItem(item)
+        
+        # 添加用户库
+        for lib in self.libraries:
+            item = QListWidgetItem(lib['name'])
+            item.setData(Qt.UserRole, lib['path'])
+            self.library_list.addItem(item)
+        self.scan_all_libraries()
+
+    def load_special_category(self, category):
+        # 实现特殊分类加载逻辑
+        self.right_content.setRowCount(0)
+        if category == 'all_comics':
+            # 加载所有漫画
+            self.load_library_files()
+        elif category == 'recently_read':
+            # 加载最近阅读
+            recent_records = [r for r in self.all_records if r.get('last_read')]
+            recent_records.sort(key=lambda x: x.get('last_read', 0), reverse=True)
+            self.populate_table(recent_records)
+
+    def load_library_contents(self, lib_path):
+        # 实现库内容加载逻辑
+        self.right_content.setRowCount(0)
+        lib_records = [r for r in self.all_records if r.get('library_path') == lib_path]
+        self.populate_table(lib_records)
+
+    def populate_table(self, records):
+        # 通用表格填充方法
+        for record in records:
+            file_path = record.get('full_path')
+            if not file_path or not os.path.exists(file_path):
+                continue
+            file_info = QFileInfo(file_path)
+            file_name = record.get('name', file_info.fileName())
+            modified_time = record.get('modified_time', '未知时间')
+            if isinstance(modified_time, (int, float)):
+                modified_time = datetime.datetime.fromtimestamp(modified_time).strftime('%Y-%m-%d %H:%M:%S')
+            file_size = format_file_size(record.get('size', 0))
+            row = self.right_content.rowCount()
+            self.right_content.insertRow(row)
+            name_item = QTableWidgetItem(file_name)
+            name_item.setData(Qt.UserRole, file_path)
+            self.right_content.setItem(row, 0, name_item)
+            date_item = QTableWidgetItem(modified_time)
+            date_item.setTextAlignment(Qt.AlignCenter)
+            self.right_content.setItem(row, 1, date_item)
+            size_item = QTableWidgetItem(file_size)
+            size_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.right_content.setItem(row, 2, size_item)
+
+    def on_library_selected(self, current, previous):
+        if current:
+            # 获取选中的库路径
+            lib_path = current.data(Qt.UserRole)
+            if lib_path in ['all_comics', 'recently_read']:
+                # 处理特殊分类
+                self.load_special_category(lib_path)
+            else:
+                # 加载具体库内容
+                self.load_library_contents(lib_path)
+
+    def edit_library_name(self, item):
+        # 获取当前库信息
+        current_name = item.text()
+        lib_path = item.data(Qt.UserRole)
+        if not lib_path or lib_path in ['all_comics', 'recently_read']:
+            return
+
+        # 显示输入对话框
+        new_name, ok = QInputDialog.getText(self, self.i18n.get_text('settings.edit_library'),
+                                           self.i18n.get_text('settings.enter_new_name'),
+                                           QLineEdit.Normal, current_name)
+
+        if ok and new_name and new_name != current_name:
+            # 更新内存中的库配置
+            for lib in self.libraries:
+                if lib['path'] == lib_path:
+                    lib['name'] = new_name
+                    break
+
+            # 更新UI显示
+            item.setText(new_name)
+            # 保存配置
+            ComicLibraryUtils.save_libraries_config(self.libraries)
+
+    def on_collection_item_changed(self, current, previous):
+        if current:
+            # 处理标签项选择变化
+            tag_text = current.text()
+            # 可以在这里添加过滤或更新显示逻辑
+            pass
+
+    def init_sidebar(self):
+        # 创建侧边栏部件
+        self.sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(5, 5, 5, 5)
+        sidebar_layout.setSpacing(10)
+
+        # 1. 库管理部分
+        self.library_group = QGroupBox("库管理")
+        library_layout = QVBoxLayout()
+        self.library_list = QListWidget()
+        self.add_library_btn = QPushButton("+ 添加库")
+        self.add_library_btn.clicked.connect(self.add_library)
+        library_layout.addWidget(self.library_list)
+        library_layout.addWidget(self.add_library_btn)
+        self.library_group.setLayout(library_layout)
+
+        # 2. 标签管理部分
+        self.tag_group = QGroupBox("标签管理")
+        tag_layout = QVBoxLayout()
+        self.tag_list = QListWidget()
+        # 添加收藏列表
+        self.favorite_item = QListWidgetItem("收藏")
+        self.favorite_item.setData(Qt.UserRole, "favorites")
+        self.tag_list.addItem(self.favorite_item)
+        # 连接标签列表点击事件
+        self.tag_list.currentItemChanged.connect(self.on_collection_item_changed)
+        tag_layout.addWidget(self.tag_list)
+        self.tag_group.setLayout(tag_layout)
+
+        # 添加到主布局
+        sidebar_layout.addWidget(self.library_group)
+        sidebar_layout.addWidget(self.tag_group)
+
+        # 加载库配置
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        # 连接信号
+        self.library_list.currentItemChanged.connect(self.on_library_selected)
+        # 启用库名称双击编辑
+        self.library_list.itemDoubleClicked.connect(self.edit_library_name)
+        self.library_list.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
 
     def create_toolbar(self):
         self.toolbar = self.addToolBar('Main Toolbar')
@@ -136,6 +359,8 @@ class ComicLibraryWindow(QMainWindow):
             # 刷新UI文本
             self.refresh_ui_text()
     
+
+    
     def refresh_ui_text(self):
         # 更新窗口标题
         self.setWindowTitle(self.i18n.get_text('main_window.title'))
@@ -148,16 +373,34 @@ class ComicLibraryWindow(QMainWindow):
         # 更新侧边栏文本 - 仅更新前4个固定项
         if hasattr(self, 'library_list') and isinstance(self.library_list, QListWidget):
             # 只更新前4个固定分类项，不更新实际库名称
-            for i in range(min(4, self.library_list.count())):
-                item_key = ['all_comics', 'recently_read', 'favorites', 'categories'][i]
+            # 仅更新现有固定分类项，与item_key列表长度匹配
+            item_keys = ['all_comics', 'recently_read']
+            for i in range(min(len(item_keys), self.library_list.count())):
+                item_key = item_keys[i]
                 self.library_list.item(i).setText(self.i18n.get_text(f'main_window.sidebar.{item_key}'))
+            
+            # 移除现有库项（第4项之后的所有项）
+            # 仅保留固定分类项，移除多余库项
+            while self.library_list.count() > len(item_keys):
+                self.library_list.takeItem(self.library_list.count() - 1)
+            
+            # 添加库列表
+            libraries = ComicLibraryUtils.load_libraries_config()
+            for lib in libraries:
+                lib_path = lib['path']
+                # 基于路径生成稳定的库ID
+                lib_id = str(uuid.uuid5(uuid.NAMESPACE_URL, lib_path))
+                item = QListWidgetItem(lib['name'])
+                item.setData(Qt.UserRole, lib_id)
+                self.library_list.addItem(item)
         
         # 更新表格标题
-        self.right_content.setHorizontalHeaderLabels([
-            self.i18n.get_text('main_window.table.name'),
-            self.i18n.get_text('main_window.table.modified_date'),
-            self.i18n.get_text('main_window.table.size')
-        ])
+        if hasattr(self, 'right_content'):
+            self.right_content.setHorizontalHeaderLabels([
+                self.i18n.get_text('main_window.table.name'),
+                self.i18n.get_text('main_window.table.modified_date'),
+                self.i18n.get_text('main_window.table.size')
+            ])
         
         # 更新状态栏文本
         if hasattr(self, 'total_comics'):
@@ -171,266 +414,26 @@ class ComicLibraryWindow(QMainWindow):
         if hasattr(self, 'settings_action'):
             self.settings_action.setText(self.i18n.get_text('main_window.toolbar.settings'))
 
-    def load_library_files(self, category=None):
+    def load_library_files(self, category=None, library_id=None):
         self.right_content.clear()
-        try:
-            with open('resource/record.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                # 处理可能的JSON结构：直接是数组或包含在'records'键中
-                records = data if isinstance(data, list) else data.get('records', [])
-                
-            if category and category != '全部':
-                records = [r for r in records if isinstance(r, dict) and r.get('category') == category]
-                
-            self.statusBar().showMessage(f'共找到 {len(records)} 个文件')
-            
-            for record in records:
-                file_path = record.get('path')
-                if not file_path or not os.path.exists(file_path):
-                    continue
-                    
-                # 获取文件信息
-                file_info = QFileInfo(file_path)
-                file_name = file_info.fileName()
-                modified_time = file_info.lastModified().toString('yyyy-MM-dd HH:mm')
-                file_size = format_file_size(file_info.size())
-                
-                # 创建表格项
-                row = self.right_content.rowCount()
-                self.right_content.insertRow(row)
-                
-                # 名称列
-                name_item = QTableWidgetItem(file_name)
-                name_item.setIcon(icon)
-                name_item.setData(Qt.UserRole, file_path)
-                self.right_content.setItem(row, 0, name_item)
-                
-                # 修改日期列
-                date_item = QTableWidgetItem(modified_time)
-                date_item.setTextAlignment(Qt.AlignCenter)
-                self.right_content.setItem(row, 1, date_item)
-                
-                # 大小列
-                size_item = QTableWidgetItem(file_size)
-                size_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self.right_content.setItem(row, 2, size_item)
-                
-            # 调整列宽
-            self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-                
-        except Exception as e:
-            self.statusBar().showMessage(f'加载文件失败: {str(e)}')
-            print(f'Error loading library files: {e}')
-
-
-
-    def init_sidebar(self):
-        # 创建侧边栏主容器
-        self.sidebar = QWidget()
-        sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(5, 5, 5, 5)
-        sidebar_layout.setSpacing(10)
-
-        # 1. 库管理部分
-        self.library_group = QGroupBox("库管理")
-        library_layout = QVBoxLayout()
-        self.library_list = QListWidget()
-        self.add_library_btn = QPushButton("+ 添加库")
-        self.add_library_btn.clicked.connect(self.add_library)
-        library_layout.addWidget(self.library_list)
-        library_layout.addWidget(self.add_library_btn)
-        self.library_group.setLayout(library_layout)
-
-        # 2. 作品集管理部分
-        self.collection_group = QGroupBox("作品集管理")
-        collection_layout = QVBoxLayout()
-        self.collection_list = QListWidget()
-        # 添加收藏列表
-        self.favorite_item = QListWidgetItem("收藏列表")
-        self.favorite_item.setData(Qt.UserRole, "favorites")
-        self.collection_list.addItem(self.favorite_item)
-        # 连接收藏列表点击事件
-        self.collection_list.currentItemChanged.connect(self.on_collection_item_changed)
-        collection_layout.addWidget(self.collection_list)
-        self.collection_group.setLayout(collection_layout)
-
-        # 3. 标签管理部分
-        self.tag_group = QGroupBox("标签管理")
-        tag_layout = QVBoxLayout()
-        self.tag_list = QListWidget()
-        tag_layout.addWidget(self.tag_list)
-        self.tag_group.setLayout(tag_layout)
-
-        # 添加到主布局
-        sidebar_layout.addWidget(self.library_group)
-        sidebar_layout.addWidget(self.collection_group)
-        sidebar_layout.addWidget(self.tag_group)
-
-        # 加载库配置
-        self.load_libraries_config()
-        # 连接信号
-        self.library_list.currentItemChanged.connect(self.on_library_changed)
-        # 启用库名称双击编辑
-        self.library_list.itemDoubleClicked.connect(self.edit_library_name)
-        self.library_list.setEditTriggers(QAbstractItemView.NoEditTriggers)
-    
-    def load_libraries_config(self):
-        # 从lib-func加载库配置
-        # 确保返回值为列表类型
-        # 添加异常处理确保配置加载失败时程序稳定
-        try:
-            self.libraries = ComicLibraryUtils.load_libraries_config() or []
-        except Exception as e:
-            print(f"加载库配置失败: {str(e)}")
-            self.libraries = []
-        
-        # 更新库列表显示
-        self.library_list.clear()
-        for lib in self.libraries:
-            item = QListWidgetItem(lib['name'])
-            item.setData(Qt.UserRole, lib['path'])
-            self.library_list.addItem(item)
-    
-    def add_library(self):
-        # 添加新库
-        dir_path = QFileDialog.getExistingDirectory(self, self.i18n.get_text('settings.library_path.browse_title'))
-        if not dir_path:
+        if not hasattr(self, 'all_records'):
+            self.statusBar().showMessage('未找到记录数据')
             return
-        if dir_path:
-            lib_name = os.path.basename(dir_path)
-            # 检查是否已存在
-            for lib in self.libraries:
-                if lib['path'] == dir_path:
-                    QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_exists'))
-                    return
             
-            # 调用ComicLibraryUtils创建新库
-            success = ComicLibraryUtils.create_new_library(dir_path)
-            if not success:
-                QMessageBox.warning(self, self.i18n.get_text('settings.error.title'), self.i18n.get_text('settings.error.library_creation_failed'))
-                return
+        # 使用工具类筛选记录
+        records = ComicLibraryUtils.filter_records_by_library(
+            self.all_records,
+            library_id=library_id,
+            category=category
+        )
             
-        # 更新配置
-        self.libraries.append({'name': lib_name, 'path': dir_path})
-        ComicLibraryUtils.save_libraries_config(self.libraries)
+        self.statusBar().showMessage(f'共找到 {len(records)} 个文件')
         
-        # 更新列表
-        # 刷新库列表并保留默认分类
-        self.libraries = ComicLibraryUtils.load_libraries_config()
-        self.library_list.clear()
+        # 使用通用表格填充方法处理所有记录
+        self.populate_table(records)
         
-        # 重新添加默认分类
-        default_categories = [
-            self.i18n.get_text('main_window.sidebar.all_comics'),
-            self.i18n.get_text('main_window.sidebar.recently_read'),
-            self.i18n.get_text('main_window.sidebar.favorites'),
-            self.i18n.get_text('main_window.sidebar.categories')
-        ]
-        for cat in default_categories:
-            item = QListWidgetItem(cat)
-            self.library_list.addItem(item)
-        
-        # 添加用户库
-        for lib in self.libraries:
-            item = QListWidgetItem(lib['name'])
-            item.setData(Qt.UserRole, lib['path'])
-            self.library_list.addItem(item)
-        self.scan_all_libraries()
-    
-    def scan_all_libraries(self):
-        # 从lib-func扫描所有库
-        self.all_records = ComicLibraryUtils.scan_all_libraries(self.libraries)
-        
-        # 更新作品集和标签
-        self.update_collections_and_tags()
-    
-    def update_collections_and_tags(self):
-        # 更新作品集和标签列表
-        collections = set()
-        tags = set()
-        
-        for record in self.all_records:
-            if isinstance(record, dict):
-                if 'collection' in record:
-                    collections.add(record['collection'])
-                if 'tags' in record and isinstance(record['tags'], list):
-                    tags.update(record['tags'])
-        
-        # 更新作品集列表
-        self.collection_list.clear()
-        # 添加收藏列表
-        self.favorite_item = QListWidgetItem("收藏列表")
-        self.favorite_item.setData(Qt.UserRole, "favorites")
-        self.collection_list.addItem(self.favorite_item)
-        # 添加其他作品集
-        for coll in sorted(collections):
-            self.collection_list.addItem(coll)
-        
-        # 更新标签列表
-        self.tag_list.clear()
-        for tag in sorted(tags):
-            self.tag_list.addItem(tag)
-    
-    def on_collection_item_changed(self, current, previous):
-        if not current:
-            return
-        item_type = current.data(Qt.UserRole)
-        if item_type == "favorites":
-            # 清空右侧内容区域
-            self.right_content.setRowCount(0)
-            # 遍历所有记录，筛选出收藏的作品
-            for record in self.all_records:
-                if record.get("favorite", False):
-                    row = self.right_content.rowCount()
-                    self.right_content.insertRow(row)
-                    self.right_content.setItem(row, 0, QTableWidgetItem(record.get("title", "未知作品")))
-                    self.right_content.setItem(row, 1, QTableWidgetItem(format_file_size(record.get("size", 0))))
-
-    def edit_library_name(self, item):
-        # 跳过前4个固定分类项
-        if self.library_list.row(item) < 4:
-            return
-
-        # 创建编辑对话框
-        new_name, ok = QInputDialog.getText(self, self.i18n.get_text('library.edit_title'),
-                                           self.i18n.get_text('library.enter_new_name'),
-                                           QLineEdit.Normal, item.text())
-
-        if ok and new_name and new_name != item.text():
-            # 查找并更新库配置
-            lib_index = self.library_list.row(item) - 4  # 减去固定项数量
-            if 0 <= lib_index < len(self.libraries):
-                self.libraries[lib_index]['name'] = new_name
-                ComicLibraryUtils.save_libraries_config(self.libraries)
-                item.setText(new_name)
-
-    def on_library_changed(self, current, previous):
-        if current:
-            lib_path = current.data(Qt.UserRole)
-            # 筛选当前库的记录并显示
-            self.right_content.setRowCount(0)
-            # 清空之前的表格内容
-            self.right_content.clearContents()
-            
-            # 筛选属于当前库的记录
-            library_records = [r for r in self.all_records if isinstance(r, dict) and r.get('basic_info', {}).get('path', '').startswith(lib_path)]
-            
-            for row, record in enumerate(library_records):
-                basic_info = record.get('basic_info', {})
-                file_name = basic_info.get('name', '未知文件')
-                modified_time = basic_info.get('modified_time', '未知时间')
-                file_size = format_file_size(basic_info.get('size', 0))
-                
-                # 插入新行
-                self.right_content.insertRow(row)
-                
-                # 设置表格内容
-                self.right_content.setItem(row, 0, QTableWidgetItem(file_name))
-                self.right_content.setItem(row, 1, QTableWidgetItem(modified_time))
-                self.right_content.setItem(row, 2, QTableWidgetItem(file_size))
-            
-            # 调整列宽
-            self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # 调整列宽
+        self.right_content.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
     
     def on_sidebar_item_changed(self, current, previous):
         if current:
@@ -627,7 +630,7 @@ if __name__ == "__main__":
 
         # 更新侧边栏文本
         for i in range(self.sidebar.count()):
-            item_key = ["all_comics", "recently_read", "favorites", "categories"][i]
+            item_key = ["all_comics", "recently_read"][i]
             self.sidebar.item(i).setText(self.i18n.get_text(f"main_window.sidebar.{item_key}"))
 
     def resizeEvent(self, event):

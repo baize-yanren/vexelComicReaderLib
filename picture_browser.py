@@ -1,3 +1,9 @@
+'''
+@version 1.0
+@brief 图片查看器
+@author 炎刃
+@date 2025-07-24
+'''
 import sys
 import os
 import argparse

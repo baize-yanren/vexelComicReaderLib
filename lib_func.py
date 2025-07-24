@@ -1,6 +1,15 @@
+'''
+@version 1.0
+@brief 实现前端的一些相关功能
+@author 炎刃
+@date 2025-07-24
+'''
 import os
 import json
 import uuid
+import zipfile
+from PIL import Image
+import shutil
 from PyQt5.QtWidgets import QMessageBox
 
 class I18nManager:
@@ -118,6 +127,10 @@ class ComicLibraryUtils:
             if lib.get('path') == folder_path:
                 raise ValueError(f"库已存在: {folder_path}")
 
+        # 确保libraries字段存在
+        if 'libraries' not in record_data:
+            record_data['libraries'] = []
+        
         # 添加新库到record_data
         new_lib = {
             "id": lib_id,
@@ -139,17 +152,116 @@ class ComicLibraryUtils:
         return lib_id
 
     @staticmethod
+    def extract_tags(records):
+        """从记录中提取并返回排序后的标签列表"""
+        tags = set()
+        for record in records:
+            if isinstance(record, dict) and 'tags' in record and isinstance(record['tags'], list):
+                tags.update(record['tags'])
+        return sorted(tags)
+
+    @staticmethod
+    def filter_favorite_records(records):
+        """筛选出收藏的记录"""
+        return [record for record in records if record.get("favorite", False)]
+
+    @staticmethod
+    def filter_records_by_library(records, library_id=None, category=None):
+        """根据库ID或分类筛选记录"""
+        if library_id:
+            return [r for r in records if r.get('lib_id') == library_id]
+        elif category and category != '全部':
+            return [r for r in records if isinstance(r, dict) and r.get('category') == category]
+        return records
+
+    @staticmethod
+    def filter_records_by_tag(records, tag_name, current_lib_path=None):
+        """根据标签和当前库路径筛选记录"""
+        filtered = []
+        for record in records:
+            record_path = record.get("basic_info", {}).get("path", "")
+            if (tag_name in record.get("tags", []) and 
+                (current_lib_path is None or record_path.startswith(current_lib_path))):
+                filtered.append(record)
+        return filtered
+
+    @staticmethod
     def scan_all_libraries(libraries):
-        """扫描所有库的record.json"""
+        """扫描所有库，验证漫画文件并提取封面"""
         all_records = []
         for lib in libraries:
-            record_path = os.path.join(lib['path'], 'record.json')
-            if os.path.exists(record_path):
+            lib_path = lib['path']
+            lib_name = lib['name']
+            lib_id = lib.get('id', str(uuid.uuid4()))
+            
+            # 创建必要的目录和文件
+            record_path = os.path.join(lib_path, 'record.json')
+            cover_dir = os.path.join(lib_path, 'cover')
+            os.makedirs(cover_dir, exist_ok=True)
+            
+            # 初始化record.json如果不存在
+            if not os.path.exists(record_path):
+                with open(record_path, 'w', encoding='utf-8') as f:
+                    json.dump([], f, ensure_ascii=False, indent=2)
+            
+            # 读取现有记录
+            try:
                 with open(record_path, 'r', encoding='utf-8') as f:
-                    try:
-                        records = json.load(f)
-                        if isinstance(records, list):
-                            all_records.extend(records)
-                    except json.JSONDecodeError:
-                        QMessageBox.warning(None, '错误', f'无法解析{lib["name"]}的record.json')
+                    records = json.load(f)
+                    if not isinstance(records, list):
+                        records = []
+            except json.JSONDecodeError:
+                QMessageBox.warning(None, '错误', f'无法解析{lib_name}的record.json，已重置为空白记录')
+                records = []
+            
+            # 扫描压缩文件
+            comic_extensions = ('.zip', '.rar', '.7z', '.cbz', '.cbr')
+            comic_files = [f for f in os.listdir(lib_path) if f.lower().endswith(comic_extensions)]
+            
+            # 验证记录与文件的一致性
+            record_map = {r['path']: r for r in records}
+            updated_records = []
+            
+            for comic_file in comic_files:
+                comic_path = os.path.join(lib_path, comic_file)
+                comic_id = str(uuid.uuid5(uuid.NAMESPACE_URL, comic_path))
+                
+                # 如果记录不存在或已更新，则处理新漫画
+                if comic_file not in record_map or os.path.getmtime(comic_path) > record_map[comic_file].get('modified_time', 0):
+                    # 提取封面
+                    cover_path = os.path.join(cover_dir, f'{comic_id}.jpg')
+                    if not os.path.exists(cover_path):
+                        try:
+                            with zipfile.ZipFile(comic_path, 'r') as zf:
+                                # 查找压缩包中的第一个图片文件
+                                image_files = sorted([f for f in zf.namelist() if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))])
+                                if image_files:
+                                    with zf.open(image_files[0]) as img_file, open(cover_path, 'wb') as out_file:
+                                        out_file.write(img_file.read())
+                        except Exception as e:
+                            print(f'提取封面失败 {comic_file}: {e}')
+                            cover_path = ''
+                    
+                    # 创建或更新记录
+                    comic_record = {
+                        'id': comic_id,
+                        'name': os.path.splitext(comic_file)[0],
+                        'path': comic_file,
+                        'full_path': comic_path,
+                        'cover': cover_path,
+                        'size': os.path.getsize(comic_path),
+                        'modified_time': os.path.getmtime(comic_path),
+                        'lib_id': lib_id,
+                        'lib_name': lib_name
+                    }
+                    updated_records.append(comic_record)
+                else:
+                    updated_records.append(record_map[comic_file])
+            
+            # 保存更新后的记录
+            with open(record_path, 'w', encoding='utf-8') as f:
+                json.dump(updated_records, f, ensure_ascii=False, indent=2)
+            
+            all_records.extend(updated_records)
+        
         return all_records
