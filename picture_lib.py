@@ -130,8 +130,7 @@ class ComicLibraryWindow(QMainWindow):
         # 设置分割器初始大小
         self.splitter.setSizes([300, 900])
         
-        # 连接库列表选择事件
-        self.library_list.itemClicked.connect(self.on_library_selected)
+
         # 初始加载所有漫画
         # 确保从配置加载库并刷新UI
         self.libraries = ComicLibraryUtils.load_libraries_config()
@@ -190,11 +189,10 @@ class ComicLibraryWindow(QMainWindow):
         
         # 重新添加默认分类
         default_categories = [
-            self.i18n.get_text('main_window.sidebar.all_comics'),
-            self.i18n.get_text('main_window.sidebar.recently_read')
+            self.i18n.get_text('main_window.sidebar.all_comics')
         ]
         # 使用zip确保分类与键一一对应，避免索引错误
-        item_keys = ["all_comics", "recently_read"]
+        item_keys = ["all_comics"]
         for cat, key in zip(default_categories, item_keys):
             item = QListWidgetItem(cat)
             item.setData(Qt.UserRole, key)
@@ -301,10 +299,28 @@ class ComicLibraryWindow(QMainWindow):
         # 1. 库管理部分
         self.library_group = QGroupBox("库管理")
         library_layout = QVBoxLayout()
-        self.library_list = QListWidget()
+        # 创建按钮容器和布局
+        self.library_buttons = QWidget()
+        buttons_layout = QVBoxLayout(self.library_buttons)
+        
+        # 全部漫画按钮
+        all_comics_btn = QPushButton(self.i18n.get_text('main_window.sidebar.all_comics'))
+        all_comics_btn.clicked.connect(lambda: self.load_special_category('all_comics'))
+        buttons_layout.addWidget(all_comics_btn)
+        
+        # 加载库配置并创建按钮
+        self.libraries = ComicLibraryUtils.load_libraries_config()
+        for lib in self.libraries:
+            lib_btn = QPushButton(lib['name'])
+            lib_btn.clicked.connect(lambda checked, path=lib['path']: self.load_library_contents(path))
+            buttons_layout.addWidget(lib_btn)
+        
+        # 添加库按钮
         self.add_library_btn = QPushButton("+ 添加库")
         self.add_library_btn.clicked.connect(self.add_library)
-        library_layout.addWidget(self.library_list)
+        
+        # 将按钮容器和添加按钮添加到布局
+        library_layout.addWidget(self.library_buttons)
         library_layout.addWidget(self.add_library_btn)
         self.library_group.setLayout(library_layout)
 
@@ -327,11 +343,8 @@ class ComicLibraryWindow(QMainWindow):
 
         # 加载库配置
         self.libraries = ComicLibraryUtils.load_libraries_config()
-        # 连接信号
-        self.library_list.currentItemChanged.connect(self.on_library_selected)
-        # 启用库名称双击编辑
-        self.library_list.itemDoubleClicked.connect(self.edit_library_name)
-        self.library_list.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # 移除库列表相关信号连接
+        pass
 
 
     def create_toolbar(self):

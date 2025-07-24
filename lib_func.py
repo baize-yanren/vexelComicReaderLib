@@ -11,6 +11,7 @@ import zipfile
 from PIL import Image
 import shutil
 from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtCore import QFileInfo
 
 class I18nManager:
     def __init__(self):
@@ -82,6 +83,32 @@ class ComicLibraryUtils:
         config_path = os.path.join(os.path.dirname(__file__), 'settings.json')
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump({'libraries': libraries}, f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def scan_library(lib_path):
+        records = []
+        if not os.path.isdir(lib_path):
+            return records
+        
+        # 支持的漫画文件扩展名
+        comic_extensions = ['.cbz', '.cbr', '.pdf', '.epub', '.jpg', '.jpeg', '.png']
+        
+        for root, _, files in os.walk(lib_path):
+            for file in files:
+                ext = os.path.splitext(file)[1].lower()
+                if ext in comic_extensions:
+                    full_path = os.path.join(root, file)
+                    file_info = QFileInfo(full_path)
+                    
+                    # 收集文件基本信息
+                    record = {
+                        'full_path': full_path,
+                        'name': file_info.fileName(),
+                        'modified_time': file_info.lastModified().toString('yyyy-MM-dd HH:mm:ss'),
+                        'size': file_info.size()
+                    }
+                    records.append(record)
+        return records
 
     @staticmethod
     def create_new_library(folder_path):
