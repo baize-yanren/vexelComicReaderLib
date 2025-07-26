@@ -5,6 +5,7 @@
 @date 2025-07-24
 '''
 import os
+
 import json
 import uuid
 import zipfile
@@ -31,12 +32,14 @@ class I18nManager:
 
     def load_translations(self):
         try:
-            lang_file = os.path.join(os.path.dirname(__file__), "resource", "i18n", f"{self.language}.json")
+            # 使用lib_func.py所在目录(resource)直接拼接i18n路径
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            lang_file = os.path.join(base_dir, "i18n", f"{self.language}.json")
             with open(lang_file, "r", encoding="utf-8") as f:
                 self.translations = json.load(f)
         except Exception as e:
             QMessageBox.critical(None, "语言文件加载失败", f"无法加载语言文件 {lang_file}: {str(e)} 将使用默认中文界面。")
-            default_file = os.path.join(os.path.dirname(__file__), "resource", "i18n", "zh_CN.json")
+            default_file = os.path.join(base_dir, "i18n", "zh_CN.json")
             with open(default_file, "r", encoding="utf-8") as f:
                 self.translations = json.load(f)
 
