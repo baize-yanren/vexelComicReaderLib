@@ -1,8 +1,3 @@
 {
-  "libraries": [
-    {
-      "name": "lib",
-      "path": "E:/temp/lib"
-    }
-  ]
+  "theme": "light"
 }

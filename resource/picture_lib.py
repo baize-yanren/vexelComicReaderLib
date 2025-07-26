@@ -16,14 +16,15 @@ import zipfile
 import shutil
 from datetime import datetime
 from settings_dialog import SettingsDialog
+import warnings
+import sip
+warnings.filterwarnings("ignore", category=DeprecationWarning, message="sipPyTypeDict() is deprecated")
 from lib_func import I18nManager, format_file_size, ComicLibraryUtils
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QGroupBox, QPushButton, QFileDialog, QMessageBox, 
                             QHBoxLayout, QToolBar, QAction, QSplitter, QTableWidget,
                             QTableWidgetItem, QLabel, QStatusBar, QDialog, QFileDialog, QMessageBox, QAbstractItemView, QHeaderView, QInputDialog, QLineEdit)
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize, QFileInfo, QDir
-import warnings
-warnings.filterwarnings('ignore', category=DeprecationWarning, message='sipPyTypeDict() is deprecated')
 
 
 
@@ -45,10 +46,23 @@ class ComicLibraryWindow(QMainWindow):
     def load_theme_settings(self):
         # 加载主题设置并应用
         try:
-            with open("settings.json", "r", encoding="utf-8") as f:
-                settings = json.load(f)
-                theme = settings.get("theme", "light")
-                self.apply_theme(theme)
+            # 获取项目根目录并构建settings.json路径
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            config_path = os.path.join(project_root, 'settings.json')
+            print(f"调试: 尝试加载配置文件路径 - {config_path}")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    theme = settings.get("theme", "light")
+            else:
+                # 创建默认设置文件
+                theme = "light"
+                default_settings = {"theme": theme}
+                os.makedirs(os.path.dirname(config_path), exist_ok=True)
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(default_settings, f)
+            self.apply_theme(theme)
         except Exception as e:
             print(f"加载主题设置失败: {e}")
             self.apply_theme("light")

@@ -21,6 +21,9 @@
     }
   },
   "settings": {
+        "error": {
+            "library_exists": "漫画库已存在"
+        },
     "title": "设置",
     "language": {
       "label": "语言",

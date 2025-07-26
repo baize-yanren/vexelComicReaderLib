@@ -20,7 +20,10 @@ class LibraryManager:
 
     def load_libraries_config(self):
         try:
-            config_path = os.path.join(os.path.dirname(__file__), 'settings.json')
+            # 从library_manager.py所在目录(resource)向上一级找到项目根目录
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            config_path = os.path.join(project_root, 'settings.json')
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
@@ -36,7 +39,12 @@ class LibraryManager:
 
     def save_libraries_config(self):
         try:
-            config_path = os.path.join(os.path.dirname(__file__), 'settings.json')
+            # 与load_libraries_config保持一致，使用项目根目录下的settings.json
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            config_path = os.path.join(project_root, 'settings.json')
+            # 确保配置文件目录存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
             with open(config_path, 'w', encoding='utf-8') as f:
                 json.dump({'libraries': self.libraries}, f, ensure_ascii=False, indent=2)
             return True
@@ -63,7 +71,7 @@ class LibraryManager:
                 QMessageBox.warning(
                     None, 
                     self.i18n.get_text('error.title'), 
-                    self.i18n.get_text('error.library_exists')
+                    self.i18n.get_text('settings.error.library_exists')
                 )
                 return False
                 

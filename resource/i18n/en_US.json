@@ -46,7 +46,8 @@
         },
         "error": {
             "title": "Error",
-            "save_failed": "Failed to save settings: {error}"
+            "save_failed": "Failed to save settings: {error}",
+            "library_exists": "Library already exists"
         }
     },
     "import": {

@@ -1,0 +1,10 @@
+{
+    "libraries": [
+        {
+            "name": "lib",
+            "path": "E:/temp/lib"
+        }
+    ],
+    "language": "zh_CN",
+    "theme": "dark"
+}
